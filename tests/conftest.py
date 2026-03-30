@@ -13,6 +13,7 @@ import asyncio
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -206,9 +207,19 @@ def tmp_workspace(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client() -> Generator:
-    """Synchronous test client. DB is initialised before each test."""
+    """Synchronous test client. Waits for background DB init before tests run."""
     from main import app
+
     with TestClient(app, raise_server_exceptions=True) as c:
+        deadline = time.monotonic() + 60.0
+        while time.monotonic() < deadline:
+            try:
+                r = c.get("/ready")
+                if r.status_code in (200, 503):
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
         yield c
 
 

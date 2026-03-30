@@ -12,7 +12,7 @@ def test_ready_probe_public(client):
     assert client.get("/ready").status_code == 200
 
 
-def test_health_has_worker_fields(client):
-    h = client.get("/health").json()
-    assert "worker_count" in h
-    assert "ready" in h
+def test_ready_has_queue_fields(client):
+    r = client.get("/ready").json()
+    assert r.get("ok") is True
+    assert "queue_depth" in r

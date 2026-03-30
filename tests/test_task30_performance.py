@@ -46,11 +46,9 @@ async def test_db_pool_semaphore_limits_concurrent_acquires():
     assert max_active <= 3
 
 
-def test_health_returns_memory_uptime_pool_fields(client: TestClient):
+def test_health_is_minimal_liveness(client: TestClient):
     d = client.get("/health").json()
-    assert "memory_mb" in d
-    assert "uptime_seconds" in d
-    assert d.get("db_pool_size") == 10
+    assert d == {"status": "ok", "app": "Pantheon COO OS"}
 
 
 def test_load_test_script_exists_and_has_argparse():

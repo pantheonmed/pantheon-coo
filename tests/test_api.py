@@ -10,6 +10,7 @@ Claude API is mocked via conftest.py — no real API calls.
 """
 import json
 import sqlite3
+import time
 import uuid
 from datetime import datetime
 
@@ -28,16 +29,13 @@ class TestHealthEndpoints:
 
     def test_health_has_required_fields(self, client: TestClient):
         data = client.get("/health").json()
-        assert "status" in data
-        assert data["status"] == "ok"
-        assert "app" in data
-        assert "version" in data
-        assert "agents" in data
+        assert data == {"status": "ok", "app": "Pantheon COO OS"}
 
-    def test_health_includes_ports(self, client: TestClient):
+    def test_health_has_no_db_dependency(self, client: TestClient):
+        """Liveness probe stays minimal for Railway / load balancers."""
         data = client.get("/health").json()
-        assert "ports" in data
-        assert "backend" in data["ports"]
+        assert "queue_depth" not in data
+        assert "version" not in data
 
     def test_stats_returns_200(self, client: TestClient):
         resp = client.get("/stats")
@@ -319,10 +317,16 @@ class TestStuckTaskRecovery:
         conn.close()
 
         with TestClient(app) as c2:
-            r = c2.get(f"/tasks/{tid}")
-            assert r.status_code == 200
-            data = r.json()
-            assert data["status"] == "failed"
+            deadline = time.monotonic() + 30.0
+            data = {}
+            while time.monotonic() < deadline:
+                r = c2.get(f"/tasks/{tid}")
+                assert r.status_code == 200
+                data = r.json()
+                if data.get("status") == "failed":
+                    break
+                time.sleep(0.05)
+            assert data.get("status") == "failed"
             err = data.get("error") or ""
             assert "Server restarted" in err
             assert "retry" in err.lower()

@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN python -m venv /venv \
     && /venv/bin/pip install --no-cache-dir --upgrade pip \
-    && /venv/bin/pip install --no-cache-dir -r requirements.txt \
-    && /venv/bin/playwright install chromium --with-deps
+    && /venv/bin/pip install --no-cache-dir -r requirements.txt
+RUN /venv/bin/pip install --no-cache-dir playwright
+RUN /venv/bin/playwright install chromium --with-deps
 
 # Stage 2: minimal runtime + non-root user
 FROM python:3.11-slim-bookworm AS runtime
