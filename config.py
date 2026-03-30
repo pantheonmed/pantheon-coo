@@ -9,6 +9,13 @@ from typing import Any
 
 from pydantic_settings import BaseSettings
 
+try:
+    from playwright.async_api import async_playwright  # noqa: F401
+
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
 
 class Settings(BaseSettings):
     app_name: str = "Pantheon COO OS"

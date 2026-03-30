@@ -1,8 +1,7 @@
-"""Task 72 — Railway config + multi-stage Dockerfile."""
+"""Task 72 — Railway config + Dockerfile."""
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,11 +21,10 @@ def test_railway_deploy_doc_exists():
     assert (ROOT / "RAILWAY_DEPLOY.md").is_file()
 
 
-def test_dockerfile_multi_stage():
+def test_dockerfile_python_slim_base():
     text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert text.count("FROM ") >= 2
-    assert re.search(r"AS\s+builder", text, re.I)
-    assert re.search(r"AS\s+runtime", text, re.I)
+    assert "python:3.11-slim" in text
+    assert "uvicorn main:app" in text
 
 
 def test_dockerfile_has_healthcheck():

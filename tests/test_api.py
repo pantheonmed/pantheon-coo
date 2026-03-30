@@ -29,13 +29,17 @@ class TestHealthEndpoints:
 
     def test_health_has_required_fields(self, client: TestClient):
         data = client.get("/health").json()
-        assert data == {"status": "ok", "app": "Pantheon COO OS"}
+        assert data == {
+            "status": "ok",
+            "app": "Pantheon COO OS",
+            "version": "2.0.0",
+        }
 
     def test_health_has_no_db_dependency(self, client: TestClient):
         """Liveness probe stays minimal for Railway / load balancers."""
         data = client.get("/health").json()
         assert "queue_depth" not in data
-        assert "version" not in data
+        assert data.get("version") == "2.0.0"
 
     def test_stats_returns_200(self, client: TestClient):
         resp = client.get("/stats")

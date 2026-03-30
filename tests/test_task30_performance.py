@@ -48,7 +48,7 @@ async def test_db_pool_semaphore_limits_concurrent_acquires():
 
 def test_health_is_minimal_liveness(client: TestClient):
     d = client.get("/health").json()
-    assert d == {"status": "ok", "app": "Pantheon COO OS"}
+    assert d == {"status": "ok", "app": "Pantheon COO OS", "version": "2.0.0"}
 
 
 def test_load_test_script_exists_and_has_argparse():

@@ -48,11 +48,6 @@ from memory.db_pool import get_pool
 import orchestrator
 
 try:
-    from playwright.async_api import async_playwright  # noqa: F401
-except ImportError:
-    print("[Import] playwright not installed; browser automation steps will fail until installed")
-
-try:
     from whatsapp import router as whatsapp_router
 except Exception as e:
     print(f"[Import] whatsapp router skipped: {e}")
@@ -163,49 +158,59 @@ async def _cached_admin_analytics(period: str):
 # Startup / shutdown
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _background_startup() -> None:
-    """DB, scheduler, and heavy init — must not block HTTP /health (Railway probe)."""
+async def _background_startup_rest() -> None:
+    """Optional services after DB + scheduler (does not block /health)."""
     t0 = time.monotonic()
     try:
-        await store.init()
         if settings.white_label_enabled:
             import branding_runtime
 
             branding_runtime.load_branding_file()
+    except Exception as e:
+        print(f"White label warning: {e}")
+    try:
         if settings.otel_enabled:
-            try:
-                from monitoring import tracing as tracing_mod
+            from monitoring import tracing as tracing_mod
 
-                tracing_mod.init_tracing()
-            except Exception as e:
-                print(f"[OTel] init skipped: {e}")
+            tracing_mod.init_tracing()
+    except Exception as e:
+        print(f"[OTel] init skipped: {e}")
+    try:
         recovered = await store.recover_stuck_tasks()
         if recovered:
             print(f"[Startup] Recovered {len(recovered)} stuck task(s) from previous session")
             for row in recovered:
                 print(f"  → {row['task_id'][:8]}… was {row['status']!r}: {row['command'][:60]!r}")
+    except Exception as e:
+        print(f"Stuck-task recovery warning: {e}")
+    try:
         await store.init_projects()
+    except Exception as e:
+        print(f"Projects init warning: {e}")
+    try:
         await init_prompt_store()
-        await init_scheduler()
-        asyncio.create_task(scheduler_loop())
+    except Exception as e:
+        print(f"Prompt store warning: {e}")
+    try:
         await load_all_custom_tools()
         print("  [Startup] Optional heavy tool modules can be lazy-loaded via tools.lazy_loader.get_tool")
+    except Exception as e:
+        print(f"Custom tools warning: {e}")
+    try:
         asyncio.create_task(monitor_loop())
+    except Exception as e:
+        print(f"Monitor warning: {e}")
+    try:
         if getattr(settings, "distributed_task_queue", False):
             from taskqueue.task_queue import start_worker_tasks
 
             start_worker_tasks()
-        startup_ms = int((time.monotonic() - t0) * 1000)
-        print(f"  [Startup] Background init completed in {startup_ms}ms")
-        if startup_ms > 3000:
-            print(f"  WARNING: Slow background init ({startup_ms}ms). Check DB or network.")
-        print(f"\n{settings.app_name} v{settings.app_version} services ready. "
-              f"Backend:{settings.port}  Frontend:{settings.frontend_port}\n")
     except Exception as e:
-        import traceback
-
-        print(f"[Startup] Background init failed: {e}")
-        traceback.print_exc()
+        print(f"Task queue warning: {e}")
+    startup_ms = int((time.monotonic() - t0) * 1000)
+    print(f"  [Startup] Optional services completed in {startup_ms}ms")
+    print(f"\n{settings.app_name} v{settings.app_version} services ready. "
+          f"Backend:{settings.port}  Frontend:{settings.frontend_port}\n")
 
 
 @asynccontextmanager
@@ -217,11 +222,33 @@ async def lifespan(app: FastAPI):
               "tools/custom"]:
         pathlib.Path(d).mkdir(parents=True, exist_ok=True)
     pathlib.Path(settings.workspace_dir, "users").mkdir(parents=True, exist_ok=True)
-    setup_logging(dev_mode=settings.debug)
-    asyncio.create_task(_background_startup())
-    print("[Startup] Accepting HTTP; database and services initializing in background…")
+    try:
+        setup_logging(dev_mode=settings.debug)
+    except Exception as e:
+        print(f"Logging warning: {e}")
+    try:
+        await store.init()
+    except Exception as e:
+        print(f"DB init warning: {e}")
+    try:
+        await init_scheduler()
+        app.state.scheduler_task = asyncio.create_task(scheduler_loop())
+    except Exception as e:
+        print(f"Scheduler warning: {e}")
+    asyncio.create_task(_background_startup_rest())
+    print("[Startup] Accepting HTTP; optional services initializing in background…")
     yield
     print("Shutting down...")
+    try:
+        t = getattr(app.state, "scheduler_task", None)
+        if t is not None:
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+    except Exception:
+        pass
     try:
         from memory.redis_client import close_redis
 
@@ -1294,13 +1321,13 @@ async def list_tasks(
 # GET /health
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.get(
-    "/health",
-    summary="Liveness probe (no DB)",
-    description="Instant response for load balancers and Railway; does not touch the database.",
-)
+@app.get("/health")
 async def health():
-    return {"status": "ok", "app": "Pantheon COO OS"}
+    return {
+        "status": "ok",
+        "app": "Pantheon COO OS",
+        "version": "2.0.0",
+    }
 
 
 @app.get("/ready")
