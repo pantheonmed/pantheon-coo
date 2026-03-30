@@ -494,7 +494,14 @@ async def admin_html_page(request: Request):
     return HTMLResponse("<p>Missing static/admin_panel.html</p>", status_code=500)
 
 @app.get("/")
+async def home():
+    """Marketing landing page (static/landing.html)."""
+    return FileResponse("static/landing.html")
+
+
+@app.get("/dashboard")
 async def dashboard():
+    """Main COO dashboard UI (static/dashboard.html)."""
     return FileResponse("static/dashboard.html")
 
 
@@ -505,12 +512,8 @@ async def app_entry():
 
 @app.get("/landing")
 async def landing_page():
-    import os as _os
-
-    p = "static/landing.html"
-    if _os.path.exists(p):
-        return FileResponse(p)
-    return FileResponse("static/dashboard.html")
+    """Alias: same marketing page as ``GET /``."""
+    return FileResponse("static/landing.html")
 
 
 @app.get("/docs-page", summary="Static developer documentation (HTML)")
@@ -521,7 +524,7 @@ async def docs_page():
 @app.get("/sitemap.xml", summary="Sitemap for crawlers")
 async def sitemap_xml():
     base = "https://pantheon.ai"
-    paths = ["/", "/docs-page", "/landing", "/auth/login", "/auth/register"]
+    paths = ["/", "/dashboard", "/docs-page", "/landing", "/auth/login", "/auth/register"]
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',

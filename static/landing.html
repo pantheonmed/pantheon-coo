@@ -1,194 +1,409 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pantheon COO OS — AI Chief Operating Officer for Business</title>
-<meta name="description" content="Autonomous AI COO that executes business tasks, automates workflows, builds custom tools, and learns from every interaction. Built for Indian businesses.">
-<meta name="keywords" content="AI COO, business automation, AI agent, workflow automation, India AI tool">
-<meta property="og:title" content="Pantheon COO OS">
-<meta property="og:description" content="Your AI Chief Operating Officer. Available 24/7.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://pantheon.ai">
-<meta property="og:image" content="/static/og-image.svg">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Pantheon COO OS">
-<meta name="twitter:description" content="Autonomous AI COO for your business">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Pantheon COO OS",
-  "description": "Autonomous AI Chief Operating Officer",
-  "applicationCategory": "BusinessApplication",
-  "operatingSystem": "Web",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "INR"
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantheon COO OS — Your AI Chief Operating Officer</title>
+  <meta name="description" content="17 AI agents, 30+ integrations, autonomous execution. Your AI COO for operations, automation, and growth. Start free — upgrade to Pro with Razorpay.">
+  <meta property="og:title" content="Pantheon COO OS">
+  <meta property="og:description" content="Your AI Chief Operating Officer. Autonomous execution for modern teams.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Pantheon COO OS",
+    "description": "Your AI Chief Operating Officer — 17 AI agents, 30+ tools, autonomous execution.",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR",
+      "description": "Free tier; Pro from ₹999/month via Razorpay"
+    }
   }
-}
-</script>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #e2e4f0; min-height: 100vh; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
-  h1 { font-size: 2rem; margin-bottom: 8px; }
-  .badge {
-    display: inline-block; background: #2d3352; color: #7c6ff7; padding: 6px 12px;
-    border-radius: 999px; font-size: 13px; font-weight: 600; margin: 16px 0;
-  }
-  .lang { margin: 24px 0; }
-  .lang select { background: #1a1d27; color: #e2e4f0; border: 1px solid #2d3352; padding: 8px 12px; border-radius: 8px; }
-  .currency-toggle { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 32px; }
-  .currency-toggle button {
-    background: #1a1d27; border: 1px solid #2d3352; color: #e2e4f0; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
-  }
-  .currency-toggle button.active { background: rgba(124, 111, 247, 0.25); border-color: #7c6ff7; color: #7c6ff7; }
-  .pricing-title { font-size: 1.25rem; margin: 40px 0 16px; }
-  .pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; align-items: stretch; }
-  .card {
-    background: #1a1d27; border: 1px solid #2d3352; border-radius: 14px; padding: 24px;
-    display: flex; flex-direction: column; position: relative;
-  }
-  .card.popular { border-color: #7c6ff7; box-shadow: 0 0 0 1px rgba(124, 111, 247, 0.35); }
-  .popular-pill {
-    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-    background: #7c6ff7; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
-  }
-  .card h3 { margin: 0 0 4px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: #8b92a8; }
-  .card .plan-name { font-size: 1.35rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
-  .price { font-size: 1.75rem; font-weight: 700; color: #7c6ff7; margin: 8px 0 16px; }
-  .features { list-style: none; padding: 0; margin: 0 0 20px; flex: 1; color: #c4c9d4; font-size: 14px; }
-  .features li { margin-bottom: 10px; padding-left: 4px; }
-  a.cta {
-    display: block; text-align: center; margin-top: auto; background: linear-gradient(135deg, #7c6ff7, #5a4fd4);
-    color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600;
-  }
-  a.cta.secondary { background: transparent; border: 1px solid #2d3352; color: #e2e4f0; }
-  .hr { height: 1px; background: #2d3352; margin: 12px 0 16px; }
-</style>
+  </script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #1a1d27;
+      --border: #2a2f3d;
+      --text: #e8eaef;
+      --muted: #8b92a8;
+      --accent: #7c6ff7;
+      --accent-dim: #5a4fd4;
+      --green: #3dd68c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .noise {
+      position: fixed; inset: 0; pointer-events: none; opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      z-index: 0;
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; position: relative; z-index: 1; }
+    /* Header */
+    header.site-header {
+      position: sticky; top: 0; z-index: 50;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      display: flex; align-items: center; gap: 16px; padding: 14px 20px;
+      max-width: 1120px; margin: 0 auto;
+    }
+    .brand {
+      font-size: 1.05rem; font-weight: 700; color: var(--accent);
+      text-decoration: none !important;
+    }
+    .brand span { color: var(--text); font-weight: 500; }
+    nav.nav-main {
+      display: none; gap: 24px; margin-left: 32px; font-size: 14px;
+    }
+    nav.nav-main a { color: var(--muted); text-decoration: none !important; }
+    nav.nav-main a:hover { color: var(--text); }
+    .header-spacer { flex: 1; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 14px;
+      border: none; cursor: pointer; font-family: inherit; text-decoration: none !important;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border); color: var(--text);
+    }
+    .btn-ghost:hover { background: var(--bg2); }
+    .nav-toggle {
+      display: flex; flex-direction: column; gap: 5px; padding: 8px; background: none; border: none; cursor: pointer;
+      margin-left: auto;
+    }
+    .nav-toggle span { width: 22px; height: 2px; background: var(--text); border-radius: 1px; }
+    .mobile-nav {
+      display: none; flex-direction: column; gap: 12px; padding: 0 20px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .mobile-nav.open { display: flex; }
+    .mobile-nav a { color: var(--muted); font-size: 15px; padding: 4px 0; }
+    @media (min-width: 900px) {
+      nav.nav-main { display: flex; }
+      .nav-toggle { display: none; }
+      .mobile-nav { display: none !important; }
+    }
+    /* Hero */
+    .hero {
+      padding: 56px 0 72px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: ""; position: absolute; top: -40%; left: 50%; transform: translateX(-50%);
+      width: min(140%, 900px); height: 80%;
+      background: radial-gradient(ellipse at center, rgba(124, 111, 247, 0.22) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--accent);
+      border: 1px solid rgba(124, 111, 247, 0.4); padding: 6px 14px; border-radius: 999px;
+      margin-bottom: 20px; background: rgba(124, 111, 247, 0.08);
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 2.85rem); font-weight: 800; line-height: 1.15;
+      letter-spacing: -0.02em; max-width: 18ch;
+    }
+    .hero-lead {
+      margin-top: 18px; font-size: clamp(1rem, 2.2vw, 1.2rem); color: var(--muted); max-width: 42ch;
+    }
+    .hero-cta { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .hero-note { margin-top: 16px; font-size: 13px; color: var(--muted); }
+    /* Features */
+    section { padding: 64px 0; border-top: 1px solid var(--border); }
+    section h2 {
+      font-size: clamp(1.35rem, 3vw, 1.65rem); font-weight: 700; margin-bottom: 10px;
+    }
+    .section-desc { color: var(--muted); font-size: 15px; margin-bottom: 36px; max-width: 56ch; }
+    .feature-grid {
+      display: grid; grid-template-columns: 1fr; gap: 16px;
+    }
+    @media (min-width: 640px) {
+      .feature-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .feature-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 24px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .feature-card:hover {
+      border-color: rgba(124, 111, 247, 0.35);
+      box-shadow: 0 0 0 1px rgba(124, 111, 247, 0.12);
+    }
+    .feature-card .icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: rgba(124, 111, 247, 0.15); color: var(--accent);
+      display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 14px;
+    }
+    .feature-card h3 { font-size: 1.05rem; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: var(--muted); line-height: 1.55; }
+    /* Pricing */
+    .pricing-grid {
+      display: grid; grid-template-columns: 1fr; gap: 20px; align-items: stretch;
+    }
+    @media (min-width: 720px) {
+      .pricing-grid { grid-template-columns: 1fr 1fr; max-width: 880px; }
+    }
+    .price-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 28px;
+      display: flex; flex-direction: column; position: relative;
+    }
+    .price-card.featured {
+      border-color: rgba(124, 111, 247, 0.55);
+      box-shadow: 0 0 0 1px rgba(124, 111, 247, 0.2);
+    }
+    .pill {
+      position: absolute; top: -11px; right: 20px;
+      background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
+      padding: 5px 12px; border-radius: 999px;
+    }
+    .price-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+    .price-card .plan-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 4px; }
+    .price-tag { font-size: 2rem; font-weight: 800; color: var(--accent); margin: 12px 0 8px; }
+    .price-tag small { font-size: 1rem; font-weight: 600; color: var(--muted); }
+    .razorpay-line {
+      display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .razorpay-line svg { flex-shrink: 0; opacity: 0.9; }
+    .price-features { list-style: none; margin: 0 0 24px; flex: 1; }
+    .price-features li {
+      font-size: 14px; color: var(--text); padding: 8px 0; border-bottom: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .price-features li:last-child { border-bottom: none; }
+    .price-features li::before { content: "✓"; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    /* Testimonials */
+    .testimonial-grid {
+      display: grid; grid-template-columns: 1fr; gap: 16px;
+    }
+    @media (min-width: 720px) {
+      .testimonial-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .t-card {
+      background: var(--bg2); border: 1px dashed var(--border); border-radius: 14px; padding: 22px;
+      min-height: 160px;
+    }
+    .t-quote { font-size: 14px; color: var(--muted); font-style: italic; line-height: 1.55; margin-bottom: 16px; }
+    .t-placeholder {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .t-avatar {
+      width: 44px; height: 44px; border-radius: 50%; background: var(--border); flex-shrink: 0;
+    }
+    .t-meta .name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .t-meta .role { font-size: 12px; color: var(--muted); }
+    .t-label {
+      display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    footer.site-footer {
+      border-top: 1px solid var(--border); padding: 32px 20px 40px; text-align: center;
+      color: var(--muted); font-size: 13px;
+    }
+    footer.site-footer a { color: var(--muted); }
+    footer.site-footer a:hover { color: var(--accent); }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Pantheon COO OS</h1>
-  <p>Autonomous AI Chief Operating Officer — built for global teams.</p>
-  <div class="badge" id="langBadge">Available in 12 languages</div>
-  <div class="lang">
-    <label for="landingLang">Language</label>
-    <select id="landingLang" onchange="onLandingLang(this.value)"></select>
-  </div>
-
-  <p class="pricing-title">Plans</p>
-  <p style="color:#8b92a8;font-size:14px;margin-top:-8px;">Toggle currency — prices update for major regions.</p>
-  <div class="currency-toggle" id="currencyToggle">
-    <button type="button" data-cur="INR" class="active">INR ₹</button>
-    <button type="button" data-cur="USD">USD $</button>
-    <button type="button" data-cur="EUR">EUR €</button>
-    <button type="button" data-cur="AED">AED د.إ</button>
-  </div>
-
-  <div class="pricing" id="priceGrid">
-    <div class="card" id="card-free">
-      <h3>Free</h3>
-      <div class="plan-name">FREE</div>
-      <div class="price" data-price-free>₹0/month</div>
-      <div class="hr"></div>
-      <ul class="features">
-        <li>✅ 20 tasks/month</li>
-        <li>✅ All 19+ tools</li>
-        <li>✅ Dashboard access</li>
-        <li>✅ Email support</li>
-        <li>✅ WhatsApp commands</li>
-      </ul>
-      <a class="cta secondary" href="/app">Start Free</a>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/">Pantheon <span>COO OS</span></a>
+      <nav class="nav-main" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#testimonials">Stories</a>
+        <a href="/docs-page">Docs</a>
+      </nav>
+      <div class="header-spacer"></div>
+      <a class="btn btn-primary" href="/dashboard">Start Free</a>
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
     </div>
-    <div class="card popular" id="card-starter">
-      <span class="popular-pill">⭐ MOST POPULAR</span>
-      <h3>Starter</h3>
-      <div class="plan-name">STARTER</div>
-      <div class="price" data-price-starter>₹2,999/month</div>
-      <div class="hr"></div>
-      <ul class="features">
-        <li>✅ 100 tasks/month</li>
-        <li>✅ Everything in Free</li>
-        <li>✅ Task templates</li>
-        <li>✅ Scheduler (cron jobs)</li>
-        <li>✅ Google Sheets integration</li>
-        <li>✅ Priority support</li>
-        <li>✅ Daily briefings</li>
-      </ul>
-      <a class="cta" href="/app">Start Starter</a>
+    <div class="mobile-nav" id="mobileNav">
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#testimonials">Stories</a>
+      <a href="/docs-page">Docs</a>
+      <a class="btn btn-primary" href="/dashboard" style="margin-top:8px;text-align:center;">Start Free</a>
     </div>
-    <div class="card" id="card-pro">
-      <h3>Pro</h3>
-      <div class="plan-name">PRO</div>
-      <div class="price" data-price-pro>₹9,999/month</div>
-      <div class="hr"></div>
-      <ul class="features">
-        <li>✅ Unlimited tasks</li>
-        <li>✅ Everything in Starter</li>
-        <li>✅ Slack + Telegram bots</li>
-        <li>✅ Voice commands (WhatsApp)</li>
-        <li>✅ Custom tool builder</li>
-        <li>✅ Analytics dashboard</li>
-        <li>✅ Webhook integration</li>
-        <li>✅ Dedicated support</li>
-        <li>✅ SLA guarantee</li>
-      </ul>
-      <a class="cta" href="/app">Start Pro</a>
-    </div>
-  </div>
+  </header>
 
-  <a class="cta" href="/app" style="display:inline-block;margin-top:40px;">Open dashboard</a>
-</div>
-<script>
-const PLAN_LABELS = {
-  INR: { sym: '₹', free: '₹0/month', starter: '₹2,999/month', pro: '₹9,999/month' },
-  USD: { sym: '$', free: '$0/month', starter: '$39/month', pro: '$99/month' },
-  EUR: { sym: '€', free: '€0/month', starter: '€37/month', pro: '€92/month' },
-  AED: { sym: 'AED ', free: 'AED 0/month', starter: 'AED 149/month', pro: 'AED 369/month' },
-};
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <p class="hero-badge">Operations · Automation · Intelligence</p>
+        <h1>Your AI Chief Operating Officer</h1>
+        <p class="hero-lead">
+          Delegate execution to a full-stack AI COO: specialized agents, deep tool integrations,
+          and autonomous workflows that run while you focus on strategy.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="/dashboard">Start Free</a>
+          <a class="btn btn-ghost" href="#features">Explore capabilities</a>
+        </div>
+        <p class="hero-note">No credit card required for the Free tier. Upgrade to Pro anytime with secure Razorpay checkout.</p>
+      </div>
+    </section>
 
-function setCurrency(cur) {
-  const L = PLAN_LABELS[cur] || PLAN_LABELS.INR;
-  document.querySelectorAll('[data-price-free]').forEach((el) => { el.textContent = L.free; });
-  document.querySelectorAll('[data-price-starter]').forEach((el) => { el.textContent = L.starter; });
-  document.querySelectorAll('[data-price-pro]').forEach((el) => { el.textContent = L.pro; });
-  document.querySelectorAll('#currencyToggle button').forEach((b) => {
-    b.classList.toggle('active', b.getAttribute('data-cur') === cur);
+    <section id="features">
+      <div class="wrap">
+        <h2>Built for real operations</h2>
+        <p class="section-desc">One platform that reasons, plans, executes, and learns — with the breadth to cover day-to-day business work.</p>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="icon" aria-hidden="true">◇</div>
+            <h3>17 AI agents</h3>
+            <p>Reasoning, planning, execution, evaluation, memory, and domain specialists orchestrated in a closed loop — not a single generic chatbot.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon" aria-hidden="true">⚙</div>
+            <h3>30+ tools</h3>
+            <p>Sheets, CRM, calendar, deploy, finance, research, social, voice, and more — wired for action, not just answers.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon" aria-hidden="true">↻</div>
+            <h3>Autonomous execution</h3>
+            <p>Submit a goal, watch the COO break it into steps, run tools, report back, and retain learnings for the next task.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <div class="wrap">
+        <h2>Simple pricing</h2>
+        <p class="section-desc">Start at zero risk. Scale to Pro when you need unlimited execution and premium workflows.</p>
+        <div class="pricing-grid">
+          <div class="price-card">
+            <h3>Free</h3>
+            <div class="plan-title">FREE</div>
+            <div class="price-tag">₹0 <small>/ month</small></div>
+            <p class="razorpay-line" style="margin-bottom:16px;">Core COO experience — perfect to evaluate the platform.</p>
+            <ul class="price-features">
+              <li>Generous monthly task allowance</li>
+              <li>Full dashboard &amp; agent loop</li>
+              <li>Access to the integrated tool suite</li>
+              <li>Community &amp; email support</li>
+            </ul>
+            <a class="btn btn-ghost" href="/dashboard" style="width:100%;">Start Free</a>
+          </div>
+          <div class="price-card featured">
+            <span class="pill">Popular</span>
+            <h3>Pro</h3>
+            <div class="plan-title">PRO</div>
+            <div class="price-tag">₹999 <small>/ month</small></div>
+            <div class="razorpay-line">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" stroke="currentColor" stroke-width="1.5"/></svg>
+              <span>Pay securely with <strong style="color:var(--text);">Razorpay</strong> — UPI, cards &amp; net banking</span>
+            </div>
+            <ul class="price-features">
+              <li>Unlimited tasks (fair use)</li>
+              <li>Priority execution &amp; higher limits</li>
+              <li>Templates, schedules &amp; automations</li>
+              <li>Integrations &amp; webhook-friendly workflows</li>
+            </ul>
+            <a class="btn btn-primary" href="/dashboard" style="width:100%;">Go to dashboard &amp; upgrade</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="testimonials">
+      <div class="wrap">
+        <h2>What teams say</h2>
+        <p class="section-desc">We’re collecting stories from founders and operators. Placeholder cards below — your testimonial could go here.</p>
+        <div class="testimonial-grid">
+          <article class="t-card">
+            <span class="t-label">Placeholder</span>
+            <p class="t-quote">“Testimonial copy will appear here once we publish customer stories.”</p>
+            <div class="t-placeholder">
+              <div class="t-avatar" aria-hidden="true"></div>
+              <div class="t-meta">
+                <div class="name">Name TBD</div>
+                <div class="role">Role, Company</div>
+              </div>
+            </div>
+          </article>
+          <article class="t-card">
+            <span class="t-label">Placeholder</span>
+            <p class="t-quote">“Another quote placeholder — replace with a real outcome or metric.”</p>
+            <div class="t-placeholder">
+              <div class="t-avatar" aria-hidden="true"></div>
+              <div class="t-meta">
+                <div class="name">Name TBD</div>
+                <div class="role">Role, Company</div>
+              </div>
+            </div>
+          </article>
+          <article class="t-card">
+            <span class="t-label">Placeholder</span>
+            <p class="t-quote">“Share how Pantheon COO OS saved time or unlocked a workflow.”</p>
+            <div class="t-placeholder">
+              <div class="t-avatar" aria-hidden="true"></div>
+              <div class="t-meta">
+                <div class="name">Name TBD</div>
+                <div class="role">Role, Company</div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Pantheon COO OS — autonomous operations for modern teams.</p>
+    <p style="margin-top:8px;">
+      <a href="/docs-page">Documentation</a>
+      ·
+      <a href="/dashboard">Dashboard</a>
+      ·
+      <a href="/app">App (PWA)</a>
+    </p>
+  </footer>
+
+  <script>
+(function () {
+  var btn = document.getElementById('navToggle');
+  var nav = document.getElementById('mobileNav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
   });
-}
-
-document.getElementById('currencyToggle').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-cur]');
-  if (!btn) return;
-  setCurrency(btn.getAttribute('data-cur'));
-});
-
-async function onLandingLang(code) {
-  try {
-    const r = await fetch('/i18n/languages');
-    const d = await r.json();
-    const n = (d.languages || []).find((x) => x.code === code);
-    document.getElementById('langBadge').textContent =
-      'Available in 12 languages — ' + (n ? n.name : code);
-  } catch (_) {}
-}
-(async function init() {
-  try {
-    const r = await fetch('/i18n/languages');
-    const d = await r.json();
-    const sel = document.getElementById('landingLang');
-    (d.languages || []).forEach((l) => {
-      const o = document.createElement('option');
-      o.value = l.code;
-      o.textContent = (l.flag || '') + ' ' + l.name;
-      sel.appendChild(o);
+  nav.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      nav.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
     });
-    sel.value = 'en';
-  } catch (_) {}
-  setCurrency('INR');
+  });
 })();
-</script>
+  </script>
 </body>
 </html>

@@ -9,19 +9,18 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_landing_has_three_plan_names():
+def test_landing_has_free_and_pro_tiers():
     html = (ROOT / "static" / "landing.html").read_text(encoding="utf-8")
     upper = html.upper()
     assert "FREE" in upper
-    assert "STARTER" in upper
     assert "PRO" in upper
-    assert "MOST POPULAR" in upper
+    assert "POPULAR" in upper
+    assert "999" in html
 
 
-def test_landing_currency_toggle():
+def test_landing_mentions_razorpay():
     html = (ROOT / "static" / "landing.html").read_text(encoding="utf-8")
-    assert "INR" in html and "USD" in html
-    assert "setCurrency" in html
+    assert "Razorpay" in html or "razorpay" in html.lower()
 
 
 def test_billing_plans_three_tiers_with_features(client: TestClient):
