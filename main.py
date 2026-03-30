@@ -22,6 +22,8 @@ Run:
 import json
 import uuid
 import asyncio
+import hashlib
+import hmac
 import os
 import time
 import secrets
@@ -32,12 +34,12 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends, File, UploadFile, Query, Body
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse, Response, RedirectResponse
+from fastapi.responses import StreamingResponse, FileResponse, Response, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 _start_time = time.monotonic()
 
-from config import settings
+from config import PLAN_LIMITS, settings
 from models import (
     CommandRequest, CommandResponse, TaskStatus,
     PlanningOutput, StepResult,
@@ -336,10 +338,160 @@ async def language_context_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+# ── Password-protected /admin HTML (ADMIN_PASSWORD) ─────────────────────────
+ADMIN_UI_COOKIE = "pantheon_admin_ui"
+
+
+def _admin_session_token() -> str:
+    key = (settings.jwt_secret or "pantheon") + (settings.admin_password or "")
+    return hmac.new(key.encode(), b"pantheon-admin-ui-v1", hashlib.sha256).hexdigest()
+
+
+def _admin_cookie_ok(request: Request) -> bool:
+    if not (settings.admin_password or "").strip():
+        return False
+    c = request.cookies.get(ADMIN_UI_COOKIE)
+    if not c:
+        return False
+    try:
+        return secrets.compare_digest(c, _admin_session_token())
+    except Exception:
+        return False
+
+
+ADMIN_LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin — Pantheon COO OS</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f1117;color:#e8eaef;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;}
+form{background:#1a1d27;border:1px solid #2a2f3d;border-radius:12px;padding:28px;max-width:360px;width:100%;}
+h1{font-size:1.1rem;color:#7c6ff7;margin:0 0 16px;}
+label{display:block;font-size:12px;color:#8b92a8;margin-bottom:6px;}
+input{width:100%;padding:10px;border-radius:8px;border:1px solid #2a2f3d;background:#0f1117;color:#e8eaef;box-sizing:border-box;}
+button{margin-top:16px;width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,#7c6ff7,#5a4fd4);color:#fff;font-weight:600;cursor:pointer;}
+</style></head>
+<body>
+<form method="post" action="/admin/login">
+<h1>Admin login</h1>
+<label>Password</label>
+<input type="password" name="password" required autocomplete="current-password"/>
+<button type="submit">Sign in</button>
+</form>
+</body></html>"""
+
+
 # Dashboard
 import os as _os
 if _os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.post("/admin/login", include_in_schema=False)
+async def admin_password_login(request: Request):
+    """Set HttpOnly cookie after checking ADMIN_PASSWORD (form or JSON)."""
+    if not (settings.admin_password or "").strip():
+        raise HTTPException(503, "Admin UI not configured (set ADMIN_PASSWORD)")
+    pwd = ""
+    ct = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ct:
+        try:
+            body = await request.json()
+            pwd = str((body or {}).get("password") or "")
+        except Exception:
+            pwd = ""
+    else:
+        form = await request.form()
+        pwd = str(form.get("password") or "")
+    if not secrets.compare_digest(pwd.strip(), settings.admin_password.strip()):
+        raise HTTPException(401, "Invalid password")
+    resp = RedirectResponse(url="/admin", status_code=303)
+    resp.set_cookie(
+        ADMIN_UI_COOKIE,
+        _admin_session_token(),
+        httponly=True,
+        samesite="lax",
+        max_age=86400 * 7,
+        path="/",
+    )
+    return resp
+
+
+@app.get("/admin/logout", include_in_schema=False)
+async def admin_logout():
+    resp = RedirectResponse(url="/admin", status_code=303)
+    resp.delete_cookie(ADMIN_UI_COOKIE, path="/")
+    return resp
+
+
+@app.get("/admin/data", include_in_schema=False)
+async def admin_data_json(request: Request):
+    if not _admin_cookie_ok(request):
+        raise HTTPException(401, "Admin login required")
+    users_raw = await store.list_all_users(500)
+    users_out = []
+    for u in users_raw:
+        uid = u["user_id"]
+        tc = await store.count_tasks_for_user(uid)
+        users_out.append(
+            {
+                "user_id": uid,
+                "email": u.get("email"),
+                "plan": u.get("plan") or "free",
+                "created_at": u.get("created_at"),
+                "task_count": tc,
+            }
+        )
+    st = await store.get_stats()
+    total = int(st.get("total") or 0)
+    by = st.get("tasks") or {}
+    done = int(by.get("done") or 0)
+    failed = int(by.get("failed") or 0)
+    success_rate = round(100.0 * done / max(total, 1), 2)
+    return {
+        "users": users_out,
+        "allowed_plans": sorted(PLAN_LIMITS.keys()),
+        "stats": {
+            "total_tasks": total,
+            "done": done,
+            "failed": failed,
+            "success_rate_pct": success_rate,
+            "avg_eval_score": st.get("avg_eval_score"),
+        },
+    }
+
+
+class AdminSetPlanBody(BaseModel):
+    plan: str = Field(..., min_length=2, max_length=32)
+
+
+@app.post("/admin/users/{user_id}/plan", include_in_schema=False)
+async def admin_set_user_plan(request: Request, user_id: str, body: AdminSetPlanBody):
+    if not _admin_cookie_ok(request):
+        raise HTTPException(401, "Admin login required")
+    plan = body.plan.strip().lower()
+    if plan not in PLAN_LIMITS:
+        raise HTTPException(400, f"Invalid plan. Allowed: {', '.join(sorted(PLAN_LIMITS))}")
+    u = await store.get_user_by_id(user_id)
+    if not u:
+        raise HTTPException(404, "User not found")
+    await store.update_user_plan(user_id, plan)
+    return {"ok": True, "user_id": user_id, "plan": plan}
+
+
+@app.get("/admin", include_in_schema=False)
+async def admin_html_page(request: Request):
+    """Password-protected admin dashboard (static/admin_panel.html)."""
+    if not (settings.admin_password or "").strip():
+        return HTMLResponse(
+            "<h1>Admin UI disabled</h1><p>Set <code>ADMIN_PASSWORD</code> in the environment.</p>",
+            status_code=503,
+        )
+    if not _admin_cookie_ok(request):
+        return HTMLResponse(ADMIN_LOGIN_HTML)
+    path = "static/admin_panel.html"
+    if _os.path.exists(path):
+        return FileResponse(path)
+    return HTMLResponse("<p>Missing static/admin_panel.html</p>", status_code=500)
 
 @app.get("/")
 async def dashboard():

@@ -24,6 +24,7 @@ PLAN_RATE_LIMITS = {
     "free": {"global_rpm": 20, "execute_rpm": 3},
     "starter": {"global_rpm": 60, "execute_rpm": 10},
     "pro": {"global_rpm": 200, "execute_rpm": 30},
+    "pro_monthly": {"global_rpm": 200, "execute_rpm": 30},
     "enterprise": {"global_rpm": 1000, "execute_rpm": 100},
 }
 

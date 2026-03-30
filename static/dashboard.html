@@ -109,6 +109,11 @@
       font-weight: 600;
       text-transform: uppercase;
     }
+    .plan-badge-free { background: rgba(107, 114, 128, 0.35); color: #d1d5db; }
+    .plan-badge-starter { background: rgba(59, 130, 246, 0.25); color: #93c5fd; }
+    .plan-badge-pro { background: rgba(124, 111, 247, 0.35); color: #c4b5fd; }
+    .plan-badge-enterprise { background: rgba(245, 158, 11, 0.25); color: #fcd34d; }
+    .plan-badge-other { background: rgba(107, 114, 128, 0.25); color: var(--muted); }
     .lang-select { max-width: 140px; padding: 6px 10px; font-size: 12px; }
     .icon-btn {
       width: 40px; height: 40px;
@@ -240,6 +245,25 @@
     .usage-bar-fill.amber { background: var(--amber); }
     .usage-bar-fill.red { background: var(--red); }
     #modal-upgrade-limit .upgrade-copy { font-size: 14px; color: var(--muted); margin: 10px 0; line-height: 1.45; }
+    .plan-upgrade-wrap { max-width: 760px; }
+    .plan-compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .plan-compare-grid { grid-template-columns: 1fr; }
+    }
+    .plan-col {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      background: var(--bg2);
+    }
+    .plan-col h3 { font-size: 1rem; margin: 0 0 8px; color: var(--text); }
+    .plan-col .price { font-size: 1.35rem; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
+    .plan-col ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .plan-col.pro-col { border-color: rgba(124, 111, 247, 0.45); box-shadow: 0 0 0 1px rgba(124, 111, 247, 0.12); }
     .api-key-box {
       font-family: monospace;
       font-size: 11px;
@@ -352,9 +376,10 @@
     <div class="right-panel">
       <div class="tabs" id="tour-tabs-target">
         <button type="button" class="tab active" data-tab="logs">Logs</button>
-        <button type="button" class="tab" data-tab="plan">Plan</button>
+        <button type="button" class="tab" data-tab="steps">Steps</button>
         <button type="button" class="tab" data-tab="eval">Evaluation</button>
         <button type="button" class="tab" data-tab="memory">Memory</button>
+        <button type="button" class="tab" data-tab="plan">Plan</button>
         <button type="button" class="tab" data-tab="team" id="team-tab-btn">Team</button>
         <button type="button" class="tab" data-tab="marketplace" id="marketplace-tab-btn">Marketplace</button>
         <button type="button" class="tab" data-tab="insights" id="insights-tab-btn">Analytics+</button>
@@ -526,6 +551,97 @@
     return 'badge-queued';
   }
 
+  function formatPlanLabel(plan) {
+    var p = (plan || 'free').toString().toLowerCase();
+    if (p === 'free') return 'FREE';
+    if (p === 'open') return 'OPEN';
+    if (p === 'pro_monthly' || p === 'pro') return 'PRO';
+    if (p === 'starter') return 'STARTER';
+    if (p === 'enterprise') return 'ENTERPRISE';
+    return p.replace(/_/g, ' ').toUpperCase();
+  }
+
+  function applyPlanBadgeClass() {
+    var el = document.getElementById('hdr-plan');
+    if (!el) return;
+    var raw = (loadProfile().plan || 'free').toString().toLowerCase();
+    el.className = 'plan-badge';
+    if (raw === 'free') el.classList.add('plan-badge-free');
+    else if (raw === 'open') el.classList.add('plan-badge-other');
+    else if (raw === 'pro_monthly' || raw === 'pro') el.classList.add('plan-badge-pro');
+    else if (raw === 'starter') el.classList.add('plan-badge-starter');
+    else if (raw === 'enterprise') el.classList.add('plan-badge-enterprise');
+    else el.classList.add('plan-badge-other');
+  }
+
+  async function renderSubscriptionPlanPanel() {
+    var planRaw = 'free';
+    try {
+      var r = await apiFetch('/auth/me');
+      if (r.ok) {
+        var me = await r.json();
+        planRaw = (me.plan || 'free').toString().toLowerCase();
+        var p = loadProfile();
+        p.email = me.email;
+        p.plan = me.plan;
+        p.name = me.name;
+        p.role = me.role || 'user';
+        if (me.language) p.language = me.language;
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+        updateHeaderFromProfile();
+      } else {
+        planRaw = (loadProfile().plan || 'free').toString().toLowerCase();
+      }
+    } catch (e) {
+      planRaw = (loadProfile().plan || 'free').toString().toLowerCase();
+    }
+    var currentLabel = formatPlanLabel(planRaw);
+    var isPro = (planRaw === 'pro' || planRaw === 'pro_monthly');
+    var hasToken = !!getToken();
+    var upgradeBlock = '';
+    if (!hasToken) {
+      upgradeBlock = '<p style="font-size:13px;color:var(--muted);margin-top:12px;">Sign in to upgrade. <a id="plan-tab-login" style="color:var(--accent);">Go to login</a></p>';
+    } else if (isPro) {
+      upgradeBlock = '<p style="font-size:13px;color:var(--green);margin-top:16px;">You are on <b>PRO</b>. Thank you for subscribing.</p>';
+    } else {
+      upgradeBlock =
+        '<button type="button" class="btn-primary" id="btn-upgrade-to-pro" style="width:100%;margin-top:16px;">Upgrade to PRO</button>' +
+        '<p style="font-size:11px;color:var(--muted);margin-top:10px;">Creates an order via <code>POST /billing/create-order</code>, then opens Razorpay Checkout with <code>razorpay_key_id</code>. Completes with <code>POST /billing/verify-payment</code>.</p>';
+    }
+    var html =
+      '<div class="plan-upgrade-wrap">' +
+      '<h2 style="margin:0 0 8px;color:var(--accent);">Subscription</h2>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;">' +
+      '<span style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Current plan</span>' +
+      '<span class="plan-badge ' + (isPro ? 'plan-badge-pro' : 'plan-badge-free') + '" style="font-size:12px;">' + esc(currentLabel) + '</span>' +
+      '</div>' +
+      '<div class="plan-compare-grid">' +
+      '<div class="plan-col">' +
+      '<h3>FREE</h3>' +
+      '<div class="price">₹0<span style="font-size:13px;font-weight:500;color:var(--muted);">/month</span></div>' +
+      '<ul>' +
+      '<li>20 tasks / month</li>' +
+      '<li>Dashboard, logs, evaluation</li>' +
+      '<li>30+ tools</li>' +
+      '<li>Email support</li>' +
+      '</ul>' +
+      '</div>' +
+      '<div class="plan-col pro-col">' +
+      '<h3>PRO</h3>' +
+      '<div class="price">₹999<span style="font-size:13px;font-weight:500;color:var(--muted);">/month</span></div>' +
+      '<ul>' +
+      '<li>Unlimited tasks</li>' +
+      '<li>Higher rate limits &amp; priority</li>' +
+      '<li>Scheduler, integrations, analytics</li>' +
+      '<li>Best for power users and teams</li>' +
+      '</ul>' +
+      upgradeBlock +
+      '</div>' +
+      '</div>' +
+      '</div>';
+    return html;
+  }
+
   function openRazorpay(plan) {
     if (!getToken()) {
       window.location.href = '/auth/register';
@@ -577,8 +693,10 @@
                 }
                 var out = res2.data || {};
                 if (out.success) {
-                  alert('Payment successful! Plan upgraded to ' + (out.plan || plan));
-                  window.location.reload();
+                  refreshMe().then(function () {
+                    alert('You are now on PRO. Enjoy unlimited tasks and priority limits.');
+                    if (activeTab === 'plan') renderPanel();
+                  });
                 } else {
                   alert('Payment verified but upgrade did not complete. Please contact support.');
                 }
@@ -726,7 +844,8 @@
   function updateHeaderFromProfile() {
     var p = loadProfile();
     document.getElementById('hdr-email').textContent = p.email || '—';
-    document.getElementById('hdr-plan').textContent = (p.plan || 'free').toString();
+    document.getElementById('hdr-plan').textContent = formatPlanLabel(p.plan);
+    applyPlanBadgeClass();
     if (p.language && document.getElementById('hdr-lang').querySelector('option[value="' + p.language + '"]')) {
       document.getElementById('hdr-lang').value = p.language;
     }
@@ -812,7 +931,7 @@
       nextLabel: 'Next →'
     },
     {
-      text: 'See Logs, Plan, Evaluation and Memory for each task. COO learns from every task!',
+      text: 'See Logs, Steps, Evaluation and Memory for each task. Open Plan for subscription & upgrade. COO learns from every task!',
       target: 'tour-tabs-target',
       nextLabel: 'Try Your First Task →'
     },
@@ -878,7 +997,11 @@
   };
 
   document.getElementById('hdr-usage-wrap').onclick = function () {
-    window.location.href = '/landing';
+    activeTab = 'plan';
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('active', t.getAttribute('data-tab') === 'plan');
+    });
+    renderPanel();
   };
   document.getElementById('upgrade-maybe-later').onclick = function () {
     document.getElementById('modal-upgrade-limit').classList.remove('open');
@@ -888,7 +1011,7 @@
   };
   document.getElementById('upgrade-now-btn').onclick = function () {
     document.getElementById('modal-upgrade-limit').classList.remove('open');
-    openRazorpay('starter');
+    openRazorpay('pro_monthly');
   };
 
   async function shareTask(tid) {
@@ -1104,10 +1227,22 @@
     }
   }
 
+  function wirePlanTabListeners() {
+    var btn = document.getElementById('btn-upgrade-to-pro');
+    if (btn) btn.onclick = function () { openRazorpay('pro_monthly'); };
+    var a = document.getElementById('plan-tab-login');
+    if (a) a.onclick = function () { showScreen('screen-login'); };
+  }
+
   async function renderPanel() {
     var panel = document.getElementById('panel-content');
     if (activeTab === 'admin') {
       panel.innerHTML = await loadAdminPanelHtml();
+      return;
+    }
+    if (activeTab === 'plan') {
+      panel.innerHTML = await renderSubscriptionPlanPanel();
+      wirePlanTabListeners();
       return;
     }
     if (activeTab === 'team') {
@@ -1127,7 +1262,7 @@
       return;
     }
     if (activeTab === 'logs') panel.innerHTML = await loadLogsHtml();
-    else if (activeTab === 'plan') panel.innerHTML = renderPlanHtml();
+    else if (activeTab === 'steps') panel.innerHTML = renderPlanHtml();
     else if (activeTab === 'eval') panel.innerHTML = renderEvalHtml();
     else if (activeTab === 'memory') panel.innerHTML = await renderMemoryHtml();
   }
@@ -1154,6 +1289,7 @@
     pollDetailTimer = setInterval(async function () {
       await loadTaskDetail();
       if (activeTab === 'logs') document.getElementById('panel-content').innerHTML = await loadLogsHtml();
+      else if (activeTab === 'steps') document.getElementById('panel-content').innerHTML = renderPlanHtml();
       else if (activeTab === 'admin') document.getElementById('panel-content').innerHTML = await loadAdminPanelHtml();
       else if (activeTab === 'team' || activeTab === 'marketplace' || activeTab === 'insights') await renderPanel();
     }, 3000);
@@ -1247,7 +1383,7 @@
   /* Settings modal */
   function fillSettingsModal() {
     var p = loadProfile();
-    document.getElementById('set-plan').textContent = p.plan || 'free';
+    document.getElementById('set-plan').textContent = formatPlanLabel(p.plan);
     document.getElementById('set-email').textContent = p.email || '—';
     document.getElementById('set-apikey').textContent = p.api_key || '(not set)';
     var sel = document.getElementById('set-lang');

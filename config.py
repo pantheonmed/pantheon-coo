@@ -89,6 +89,8 @@ class Settings(BaseSettings):
     allow_registration: bool = True
     admin_email: str = ""
     admin_telegram_chat_id: str = ""
+    # Standalone /admin HTML UI (separate from JWT admin role)
+    admin_password: str = ""
 
     # Razorpay (India billing)
     razorpay_key_id: str = ""
@@ -266,6 +268,8 @@ os.environ["AUTH_MODE"] = (settings.auth_mode or "none").lower()
 PLAN_PRICING = {
     "starter": {"amount": 299900, "currency": "INR", "label": "₹2,999/month"},
     "pro": {"amount": 999900, "currency": "INR", "label": "₹9,999/month"},
+    # Dashboard “PRO” tier at ₹999/mo (Razorpay INR)
+    "pro_monthly": {"amount": 99900, "currency": "INR", "label": "₹999/month"},
     "enterprise": {"amount": 4999900, "currency": "INR", "label": "₹49,999/month"},
     "team_5": {"amount": 999900, "currency": "INR", "label": "₹9,999/month"},
     "team_25": {"amount": 2499900, "currency": "INR", "label": "₹24,999/month"},
@@ -276,6 +280,7 @@ PLAN_LIMITS = {
     "free": {"tasks_per_month": 20},
     "starter": {"tasks_per_month": 100},
     "pro": {"tasks_per_month": -1},
+    "pro_monthly": {"tasks_per_month": -1},
     "enterprise": {"tasks_per_month": -1},
     "team_5": {"tasks_per_month": -1},
     "team_25": {"tasks_per_month": -1},
@@ -286,6 +291,7 @@ GLOBAL_PRICING: dict[str, dict[str, dict[str, Any]]] = {
     "INR": {
         "starter": {"amount": 299900, "label": "₹2,999/mo"},
         "pro": {"amount": 999900, "label": "₹9,999/mo"},
+        "pro_monthly": {"amount": 99900, "label": "₹999/mo"},
         "enterprise": {"amount": 4999900, "label": "₹49,999/mo"},
         "team_5": {"amount": 999900, "label": "₹9,999/mo — 5 seats"},
         "team_25": {"amount": 2499900, "label": "₹24,999/mo — 25 seats"},
@@ -293,21 +299,25 @@ GLOBAL_PRICING: dict[str, dict[str, dict[str, Any]]] = {
     "USD": {
         "starter": {"amount": 3900, "label": "$39/mo"},
         "pro": {"amount": 9900, "label": "$99/mo"},
+        "pro_monthly": {"amount": 1200, "label": "$12/mo"},
         "enterprise": {"amount": 49900, "label": "$499/mo"},
     },
     "GBP": {
         "starter": {"amount": 3200, "label": "£32/mo"},
         "pro": {"amount": 7900, "label": "£79/mo"},
+        "pro_monthly": {"amount": 1000, "label": "£10/mo"},
         "enterprise": {"amount": 39900, "label": "£399/mo"},
     },
     "EUR": {
         "starter": {"amount": 3700, "label": "€37/mo"},
         "pro": {"amount": 9200, "label": "€92/mo"},
+        "pro_monthly": {"amount": 1100, "label": "€11/mo"},
         "enterprise": {"amount": 45900, "label": "€459/mo"},
     },
     "AED": {
         "starter": {"amount": 14900, "label": "AED 149/mo"},
         "pro": {"amount": 36900, "label": "AED 369/mo"},
+        "pro_monthly": {"amount": 4500, "label": "AED 45/mo"},
         "enterprise": {"amount": 184900, "label": "AED 1,849/mo"},
     },
 }

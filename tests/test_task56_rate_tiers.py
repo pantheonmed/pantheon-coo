@@ -9,7 +9,7 @@ from security.rate_limit import PLAN_RATE_LIMITS, plan_limits_for_auth
 
 
 def test_plan_rate_limits_all_four_plans():
-    assert set(PLAN_RATE_LIMITS.keys()) == {"free", "starter", "pro", "enterprise"}
+    assert set(PLAN_RATE_LIMITS.keys()) == {"free", "starter", "pro", "pro_monthly", "enterprise"}
     assert PLAN_RATE_LIMITS["free"]["execute_rpm"] == 3
     assert PLAN_RATE_LIMITS["starter"]["execute_rpm"] == 10
     assert PLAN_RATE_LIMITS["pro"]["execute_rpm"] == 30

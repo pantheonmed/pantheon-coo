@@ -11,6 +11,7 @@ Tables:
 Live SSE activity events are buffered in-memory per task_id (asyncio.Queue).
 """
 import asyncio
+import aiosqlite
 import json
 import secrets
 import sqlite3
@@ -672,6 +673,18 @@ async def count_users() -> int:
     async with get_pool().acquire() as db:
         async with db.execute("SELECT COUNT(*) FROM users") as cur:
             return int((await cur.fetchone())[0])
+
+
+async def list_all_users(limit: int = 500) -> list[dict[str, Any]]:
+    """All users for password-protected /admin UI (email, plan, created_at)."""
+    async with get_pool().acquire() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT user_id, email, plan, created_at FROM users ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
 
 
 async def count_tasks_for_user(user_id: str) -> int:
@@ -1607,7 +1620,7 @@ async def get_admin_dashboard_stats() -> dict[str, Any]:
             mrr_paise += int(p["amount"]) * int(cnt)
 
     paid_users = sum(
-        plan_breakdown.get(p, 0) for p in ("starter", "pro", "enterprise")
+        plan_breakdown.get(p, 0) for p in ("starter", "pro", "pro_monthly", "enterprise")
     )
     arpu = round((total_revenue_paise / 100.0) / max(paid_users, 1), 2)
 

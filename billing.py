@@ -25,7 +25,7 @@ router = APIRouter(tags=["Billing"])
 
 
 class CreateOrderBody(BaseModel):
-    plan: str = Field(..., description="starter | pro | enterprise")
+    plan: str = Field(..., description="starter | pro | pro_monthly | enterprise | team_*")
 
 
 class VerifyPaymentBody(BaseModel):
@@ -144,6 +144,18 @@ async def _billing_plans_payload(currency: Optional[str]) -> dict[str, Any]:
                 ],
             },
             {
+                "id": "pro_monthly",
+                "name": "PRO (₹999)",
+                "price": (gp.get("pro_monthly") or {}).get("label", "₹999/mo"),
+                "tasks_per_month": -1,
+                "features": [
+                    "Unlimited tasks",
+                    "All tools + integrations",
+                    "Priority execution",
+                    "Best for individuals & small teams upgrading from Free",
+                ],
+            },
+            {
                 "id": "enterprise",
                 "name": "Enterprise",
                 "price": gp["enterprise"]["label"],
@@ -214,7 +226,10 @@ async def create_order(
     if cur == "INR":
         pricing = PLAN_PRICING.get(plan)
         if not pricing:
-            raise HTTPException(400, "Invalid plan. Choose starter, pro, or enterprise.")
+            raise HTTPException(
+                400,
+                "Invalid plan. Choose starter, pro, pro_monthly, enterprise, or team plan.",
+            )
         client = get_razorpay_client()
         if not client:
             raise HTTPException(
@@ -266,7 +281,10 @@ async def create_order(
     prices = _tier_prices_for_currency(cur)
     tier = prices.get(plan)
     if not tier:
-        raise HTTPException(400, "Invalid plan. Choose starter, pro, or enterprise.")
+        raise HTTPException(
+            400,
+            "Invalid plan. Choose starter, pro, pro_monthly, enterprise, or team plan.",
+        )
     if not settings.stripe_secret_key:
         raise HTTPException(503, "Stripe is not configured. Set STRIPE_SECRET_KEY.")
 

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Pantheon COO OS</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #1a1d27;
+      --border: #2a2f3d;
+      --text: #e8eaef;
+      --muted: #8b92a8;
+      --accent: #7c6ff7;
+      --green: #3dd68c;
+      --red: #f56565;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; min-height: 100vh; }
+    header {
+      display: flex; align-items: center; gap: 16px; padding: 14px 20px;
+      border-bottom: 1px solid var(--border); background: var(--bg2); flex-wrap: wrap;
+    }
+    header h1 { font-size: 1.1rem; margin: 0; color: var(--accent); }
+    .spacer { flex: 1; }
+    a { color: var(--accent); }
+    main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px;
+    }
+    .stat {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+    }
+    .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: rgba(124, 111, 247, 0.12); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: none; }
+    select, button {
+      font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text);
+    }
+    button.primary {
+      border: none; background: linear-gradient(135deg, var(--accent), #5a4fd4); color: #fff; font-weight: 600; cursor: pointer;
+    }
+    button.primary:hover { filter: brightness(1.06); }
+    .err { color: var(--red); margin-top: 12px; font-size: 13px; }
+    code { font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Admin</h1>
+    <span style="font-size:13px;color:var(--muted);">Users &amp; system stats</span>
+    <div class="spacer"></div>
+    <a href="/admin/logout">Logout</a>
+  </header>
+  <main>
+    <div id="msg" class="err" style="display:none;"></div>
+    <div class="stats" id="stats"></div>
+    <div style="overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Plan</th>
+            <th>Tasks</th>
+            <th>Joined</th>
+            <th>Change plan</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+(function () {
+  function esc(s) {
+    if (s == null) return '';
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+  function showErr(t) {
+    var el = document.getElementById('msg');
+    el.style.display = t ? 'block' : 'none';
+    el.textContent = t || '';
+  }
+  async function load() {
+    showErr('');
+    try {
+      var r = await fetch('/admin/data', { credentials: 'same-origin' });
+      if (r.status === 401) {
+        window.location.href = '/admin';
+        return;
+      }
+      if (!r.ok) {
+        showErr('Failed to load: ' + r.status);
+        return;
+      }
+      var d = await r.json();
+      var st = d.stats || {};
+      document.getElementById('stats').innerHTML =
+        '<div class="stat"><div class="label">Total tasks</div><div class="value">' + esc(st.total_tasks) + '</div></div>' +
+        '<div class="stat"><div class="label">Done</div><div class="value" style="color:var(--green)">' + esc(st.done) + '</div></div>' +
+        '<div class="stat"><div class="label">Failed</div><div class="value" style="color:var(--red)">' + esc(st.failed) + '</div></div>' +
+        '<div class="stat"><div class="label">Success rate</div><div class="value">' + esc(st.success_rate_pct) + '%</div></div>' +
+        '<div class="stat"><div class="label">Avg eval score</div><div class="value">' + esc(st.avg_eval_score != null ? st.avg_eval_score : '—') + '</div></div>';
+
+      var rows = d.users || [];
+      var tb = document.getElementById('tbody');
+      tb.innerHTML = rows.map(function (u) {
+        var selPlans = new Set(PLANS);
+        if (u.plan) selPlans.add(u.plan);
+        var opts = Array.from(selPlans).sort().map(function (p) {
+          return '<option value="' + esc(p) + '"' + ((u.plan || 'free') === p ? ' selected' : '') + '>' + esc(p) + '</option>';
+        }).join('');
+        return '<tr data-uid="' + esc(u.user_id) + '">' +
+          '<td>' + esc(u.email) + '</td>' +
+          '<td><code>' + esc(u.plan || 'free') + '</code></td>' +
+          '<td>' + esc(u.task_count) + '</td>' +
+          '<td>' + esc(u.created_at || '—') + '</td>' +
+          '<td><select class="plan-sel">' + opts + '</select> ' +
+          '<button type="button" class="primary apply-plan">Save</button></td>' +
+          '</tr>';
+      }).join('');
+
+      tb.querySelectorAll('tr').forEach(function (row) {
+        var uid = row.getAttribute('data-uid');
+        var btn = row.querySelector('.apply-plan');
+        var sel = row.querySelector('.plan-sel');
+        btn.onclick = async function () {
+          showErr('');
+          try {
+            var r2 = await fetch('/admin/users/' + encodeURIComponent(uid) + '/plan', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ plan: sel.value })
+            });
+            var j = await r2.json().catch(function () { return {}; });
+            if (!r2.ok) {
+              showErr(typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail || j));
+              return;
+            }
+            row.querySelector('td:nth-child(2)').innerHTML = '<code>' + esc(j.plan) + '</code>';
+            alert('Plan updated to ' + j.plan);
+          } catch (e) {
+            showErr(e.message || 'Request failed');
+          }
+        };
+      });
+    } catch (e) {
+      showErr(e.message || 'Load failed');
+    }
+  }
+  load();
+})();
+  </script>
+</body>
+</html>
