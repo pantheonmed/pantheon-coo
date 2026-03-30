@@ -65,4 +65,4 @@ ENV HOST=0.0.0.0
 HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
   CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-8002}/health" || exit 1'
 
-CMD ["sh", "-c", "uvicorn main:app --host ${HOST:-0.0.0.0} --port ${PORT:-8002} --log-level info"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8002}"]
