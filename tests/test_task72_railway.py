@@ -24,7 +24,7 @@ def test_railway_deploy_doc_exists():
 def test_dockerfile_python_slim_base():
     text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "python:3.11-slim" in text
-    assert "uvicorn main_railway:app" in text
+    assert "uvicorn main:app" in text
 
 
 def test_dockerfile_has_healthcheck():

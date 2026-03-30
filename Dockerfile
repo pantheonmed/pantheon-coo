@@ -21,9 +21,9 @@ RUN mkdir -p /tmp/pantheon_v2/workspace \
     /tmp/pantheon_v2/logs \
     /tmp/pantheon_v2/screenshots
 
-# Health check
+# Health check (same $PORT as the app)
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8002}/health || exit 1
+    CMD sh -c "curl -f http://localhost:$$PORT/health || exit 1"
 
-# Start with Railway PORT
-CMD uvicorn main_railway:app --host 0.0.0.0 --port ${PORT:-8002}
+# Start with Railway PORT (shell expands $PORT at container runtime)
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port $PORT"
