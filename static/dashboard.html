@@ -416,6 +416,7 @@
     <h2 style="margin-bottom:8px;">Upgrade</h2>
     <p class="upgrade-copy" id="upgrade-limit-msg">You've used 20/20 free tasks this month.</p>
     <p class="upgrade-copy">Upgrade to Starter for ₹2,999/month and get 100 tasks + priority support.</p>
+    <div id="upgrade-limit-err" class="err" style="display:none;margin-top:12px;"></div>
     <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
       <button type="button" class="btn-ghost" id="upgrade-maybe-later">Maybe Later</button>
       <button type="button" class="btn-primary" id="upgrade-now-btn" style="margin-left:auto;">Upgrade Now →</button>
@@ -443,6 +444,8 @@
     ? String(window.PANTHEON_CONFIG.apiUrl).replace(/\/$/, '')
     : 'http://localhost:8002';
   const TOKEN_KEY = 'coo_token';
+  /** Also checked by getAuthToken: standard keys from other clients */
+  const TOKEN_FALLBACK_KEYS = ['token', 'access_token'];
   const PROFILE_KEY = 'coo_profile';
   const THEME_KEY = 'pantheon_theme';
   const TOUR_KEY = 'tour_completed';
@@ -480,13 +483,28 @@
     }
   }
 
-  function getToken() {
-    return localStorage.getItem(TOKEN_KEY);
+  function getAuthToken() {
+    try {
+      var t = localStorage.getItem(TOKEN_KEY);
+      if (t && String(t).trim()) return String(t).trim();
+      for (var i = 0; i < TOKEN_FALLBACK_KEYS.length; i++) {
+        var k = TOKEN_FALLBACK_KEYS[i];
+        var v = localStorage.getItem(k);
+        if (v && String(v).trim()) return String(v).trim();
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
   }
 
-  /** Bearer only when logged in; AUTH_MODE=none works without a token. */
+  function getToken() {
+    return getAuthToken() || null;
+  }
+
+  /** Bearer when a JWT is stored; AUTH_MODE=none still works for routes that allow it. */
   function authHeaders() {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAuthToken();
     const h = { 'Content-Type': 'application/json' };
     if (token) h['Authorization'] = 'Bearer ' + token;
     return h;
@@ -496,6 +514,13 @@
     const opts = options || {};
     const method = opts.method || 'GET';
     const headers = { ...authHeaders() };
+    if (opts.headers && typeof opts.headers === 'object') {
+      for (var hk in opts.headers) {
+        if (Object.prototype.hasOwnProperty.call(opts.headers, hk)) {
+          headers[hk] = opts.headers[hk];
+        }
+      }
+    }
     const init = { method, headers };
     if (opts.body !== undefined) init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
     return fetch(API + path, init);
@@ -605,6 +630,7 @@
       upgradeBlock = '<p style="font-size:13px;color:var(--green);margin-top:16px;">You are on <b>PRO</b>. Thank you for subscribing.</p>';
     } else {
       upgradeBlock =
+        '<div id="plan-billing-err" class="err" style="display:none;margin-top:12px;"></div>' +
         '<button type="button" class="btn-primary" id="btn-upgrade-to-pro" style="width:100%;margin-top:16px;">Upgrade to PRO</button>' +
         '<p style="font-size:11px;color:var(--muted);margin-top:10px;">Creates an order via <code>POST /billing/create-order</code>, then opens Razorpay Checkout with <code>razorpay_key_id</code>. Completes with <code>POST /billing/verify-payment</code>.</p>';
     }
@@ -642,30 +668,148 @@
     return html;
   }
 
-  function openRazorpay(plan) {
-    if (!getToken()) {
-      window.location.href = '/auth/register';
+  function clearBillingCheckoutErr() {
+    ['plan-billing-err', 'upgrade-limit-err'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = '';
+      el.style.display = 'none';
+    });
+  }
+
+  function setBillingCheckoutErr(msg, ctx) {
+    ctx = ctx || {};
+    clearBillingCheckoutErr();
+    if (!msg) return;
+    var ids = ctx.preferUpgradeModal
+      ? ['upgrade-limit-err', 'plan-billing-err']
+      : ['plan-billing-err', 'upgrade-limit-err'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el) {
+        el.textContent = msg;
+        el.style.display = 'block';
+        break;
+      }
+    }
+  }
+
+  function showBillingAuthRequired(message) {
+    var msg = message || 'Sign in to upgrade your plan.';
+    var le = document.getElementById('login-err');
+    var re = document.getElementById('reg-err');
+    if (re) re.style.display = 'none';
+    if (le) {
+      le.textContent = msg;
+      le.style.display = 'block';
+    }
+    clearBillingCheckoutErr();
+    showScreen('screen-login');
+  }
+
+  function billingDetailMessage(status, data) {
+    var d = data || {};
+    var det = d.detail;
+    if (typeof det === 'string') return det;
+    if (Array.isArray(det)) {
+      try {
+        return det.map(function (x) { return (x && x.msg) || JSON.stringify(x); }).join(' ');
+      } catch (e) {
+        return JSON.stringify(det);
+      }
+    }
+    if (det && typeof det === 'object') return JSON.stringify(det);
+    try {
+      return JSON.stringify(d);
+    } catch (e2) {
+      return 'Request failed (' + status + ')';
+    }
+  }
+
+  function isBillingAuthFailure(status, message) {
+    var m = (message || '').toLowerCase();
+    if (status === 401 || status === 403) return true;
+    return (
+      m.indexOf('authentication') >= 0 ||
+      m.indexOf('not authenticated') >= 0 ||
+      m.indexOf('missing bearer') >= 0 ||
+      m.indexOf('invalid or revoked token') >= 0 ||
+      m.indexOf('sign in') >= 0 ||
+      m.indexOf('log in') >= 0
+    );
+  }
+
+  function openRazorpay(plan, options) {
+    options = options || {};
+    clearBillingCheckoutErr();
+    var tok = getAuthToken();
+    if (!tok) {
+      if (options.fromUpgradeModal) {
+        var modal = document.getElementById('modal-upgrade-limit');
+        if (modal) modal.classList.remove('open');
+      }
+      showBillingAuthRequired('Sign in to upgrade your plan.');
       return;
     }
+    var authHdr = { Authorization: 'Bearer ' + tok };
     apiFetch('/billing/create-order', {
       method: 'POST',
+      headers: authHdr,
       body: { plan: plan }
     })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (r) {
+        return r.json().then(function (d) {
+          return { ok: r.ok, status: r.status, data: d };
+        });
+      })
       .then(function (res) {
         if (!res.ok) {
-          var d = res.data || {};
-          alert(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d));
+          var msg = billingDetailMessage(res.status, res.data);
+          if (isBillingAuthFailure(res.status, msg)) {
+            if (options.fromUpgradeModal) {
+              var modal2 = document.getElementById('modal-upgrade-limit');
+              if (modal2) modal2.classList.remove('open');
+            }
+            showBillingAuthRequired(
+              res.status === 403 && msg.indexOf('token') >= 0
+                ? 'Session invalid or expired. Please sign in again.'
+                : msg
+            );
+            return;
+          }
+          setBillingCheckoutErr(msg, { preferUpgradeModal: !!options.fromUpgradeModal });
+          if (options.fromUpgradeModal) {
+            var modal3 = document.getElementById('modal-upgrade-limit');
+            if (modal3) modal3.classList.add('open');
+          }
           return;
         }
         var order = res.data || {};
         if (order.gateway !== 'razorpay') {
-          alert('Stripe billing is configured for this currency. Please use the Stripe checkout flow.');
+          setBillingCheckoutErr(
+            'Stripe billing is configured for this currency. Use the Stripe checkout flow from your region settings.',
+            { preferUpgradeModal: !!options.fromUpgradeModal }
+          );
+          if (options.fromUpgradeModal) {
+            var modal4 = document.getElementById('modal-upgrade-limit');
+            if (modal4) modal4.classList.add('open');
+          }
           return;
         }
         if (typeof window.Razorpay === 'undefined') {
-          alert('Razorpay checkout.js failed to load. Please check your network and try again.');
+          setBillingCheckoutErr(
+            'Razorpay checkout could not load. Check your network or ad blocker and refresh the page.',
+            { preferUpgradeModal: !!options.fromUpgradeModal }
+          );
+          if (options.fromUpgradeModal) {
+            var modal5 = document.getElementById('modal-upgrade-limit');
+            if (modal5) modal5.classList.add('open');
+          }
           return;
+        }
+        if (options.fromUpgradeModal) {
+          var modal6 = document.getElementById('modal-upgrade-limit');
+          if (modal6) modal6.classList.remove('open');
         }
         var profile = loadProfile() || {};
         var opts = {
@@ -678,17 +822,26 @@
           handler: function (response) {
             apiFetch('/billing/verify-payment', {
               method: 'POST',
+              headers: authHdr,
               body: {
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_signature: response.razorpay_signature
               }
             })
-              .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+              .then(function (r) {
+                return r.json().then(function (d) {
+                  return { ok: r.ok, status: r.status, data: d };
+                });
+              })
               .then(function (res2) {
                 if (!res2.ok) {
-                  var d2 = res2.data || {};
-                  alert(typeof d2.detail === 'string' ? d2.detail : JSON.stringify(d2.detail || d2));
+                  var vm = billingDetailMessage(res2.status, res2.data);
+                  if (isBillingAuthFailure(res2.status, vm)) {
+                    showBillingAuthRequired(vm);
+                    return;
+                  }
+                  alert(vm);
                   return;
                 }
                 var out = res2.data || {};
@@ -715,7 +868,12 @@
         rzp.open();
       })
       .catch(function (e) {
-        alert(e.message || 'Failed to create order');
+        var em = e.message || 'Failed to create order';
+        setBillingCheckoutErr(em, { preferUpgradeModal: !!options.fromUpgradeModal });
+        if (options.fromUpgradeModal) {
+          var modal7 = document.getElementById('modal-upgrade-limit');
+          if (modal7) modal7.classList.add('open');
+        }
       });
   }
 
@@ -1010,8 +1168,8 @@
     if (e.target.id === 'modal-upgrade-limit') document.getElementById('modal-upgrade-limit').classList.remove('open');
   };
   document.getElementById('upgrade-now-btn').onclick = function () {
-    document.getElementById('modal-upgrade-limit').classList.remove('open');
-    openRazorpay('pro_monthly');
+    clearBillingCheckoutErr();
+    openRazorpay('pro_monthly', { fromUpgradeModal: true });
   };
 
   async function shareTask(tid) {
