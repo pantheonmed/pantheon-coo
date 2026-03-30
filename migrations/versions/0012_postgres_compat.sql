@@ -1,0 +1,17 @@
+-- 0012_postgres_compat.sql — Notes for PostgreSQL vs SQLite (Pantheon COO OS)
+--
+-- The application schema in memory/store.py is authored for SQLite. When migrating
+-- to PostgreSQL, apply the following conceptual mappings:
+--
+-- 1) INTEGER PRIMARY KEY AUTOINCREMENT  →  SERIAL PRIMARY KEY or BIGSERIAL
+-- 2) TEXT                                →  TEXT or VARCHAR(n) where bounded
+-- 3) REAL                                →  DOUBLE PRECISION
+-- 4) INTEGER (boolean 0/1)               →  BOOLEAN
+-- 5) AUTOINCREMENT                       →  GENERATED … AS IDENTITY or SERIAL
+-- 6) PRAGMA / sqlite_master              →  information_schema / pg_catalog
+-- 7) ? placeholders (SQLite)             →  $1, $2, … (asyncpg) in new queries
+--
+-- Date/time columns stored as ISO TEXT in SQLite map cleanly to TIMESTAMPTZ in Postgres
+-- if you choose to migrate types; otherwise TEXT remains compatible for reads/writes.
+--
+-- No DDL is executed here by default; this file documents compatibility for operators.

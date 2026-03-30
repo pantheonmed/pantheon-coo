@@ -1,0 +1,96 @@
+# docker-compose.yml — Pantheon COO OS (production-style backend + optional profiles)
+# One-command: bash docker-start.sh   or   docker compose up -d
+#
+# Optional PostgreSQL (host port 5433):
+#   docker compose --profile postgres up -d postgres
+# Optional Redis (host port 6380):
+#   docker compose --profile redis up -d redis
+
+version: "3.9"
+
+services:
+
+  backend:
+    image: pantheonai/coo-os:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pantheon_coo
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8002}:8002"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_MODE=${AUTH_MODE:-jwt}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - PORT=8002
+      - HOST=0.0.0.0
+      - DB_PATH=/data/pantheon_v2.db
+      - WORKSPACE_DIR=/tmp/pantheon_v2
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+    volumes:
+      - pantheon_data:/data
+      - /tmp/pantheon_v2:/tmp/pantheon_v2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - pantheon_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pantheon_postgres
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: pantheon_coo
+      POSTGRES_USER: pantheon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pantheon_dev}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pantheon_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pantheon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pantheon_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: pantheon_redis
+    profiles: ["redis"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - pantheon_redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pantheon_net
+
+volumes:
+  pantheon_data:
+    name: pantheon_coo_data
+  pantheon_postgres:
+    name: pantheon_coo_postgres
+  pantheon_redis:
+    name: pantheon_coo_redis
+
+networks:
+  pantheon_net:
+    name: pantheon_coo_network
+    driver: bridge

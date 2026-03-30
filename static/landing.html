@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pantheon COO OS — AI Chief Operating Officer for Business</title>
+<meta name="description" content="Autonomous AI COO that executes business tasks, automates workflows, builds custom tools, and learns from every interaction. Built for Indian businesses.">
+<meta name="keywords" content="AI COO, business automation, AI agent, workflow automation, India AI tool">
+<meta property="og:title" content="Pantheon COO OS">
+<meta property="og:description" content="Your AI Chief Operating Officer. Available 24/7.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://pantheon.ai">
+<meta property="og:image" content="/static/og-image.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Pantheon COO OS">
+<meta name="twitter:description" content="Autonomous AI COO for your business">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Pantheon COO OS",
+  "description": "Autonomous AI Chief Operating Officer",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "INR"
+  }
+}
+</script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #e2e4f0; min-height: 100vh; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .badge {
+    display: inline-block; background: #2d3352; color: #7c6ff7; padding: 6px 12px;
+    border-radius: 999px; font-size: 13px; font-weight: 600; margin: 16px 0;
+  }
+  .lang { margin: 24px 0; }
+  .lang select { background: #1a1d27; color: #e2e4f0; border: 1px solid #2d3352; padding: 8px 12px; border-radius: 8px; }
+  .currency-toggle { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 32px; }
+  .currency-toggle button {
+    background: #1a1d27; border: 1px solid #2d3352; color: #e2e4f0; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+  }
+  .currency-toggle button.active { background: rgba(124, 111, 247, 0.25); border-color: #7c6ff7; color: #7c6ff7; }
+  .pricing-title { font-size: 1.25rem; margin: 40px 0 16px; }
+  .pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; align-items: stretch; }
+  .card {
+    background: #1a1d27; border: 1px solid #2d3352; border-radius: 14px; padding: 24px;
+    display: flex; flex-direction: column; position: relative;
+  }
+  .card.popular { border-color: #7c6ff7; box-shadow: 0 0 0 1px rgba(124, 111, 247, 0.35); }
+  .popular-pill {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: #7c6ff7; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: #8b92a8; }
+  .card .plan-name { font-size: 1.35rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .price { font-size: 1.75rem; font-weight: 700; color: #7c6ff7; margin: 8px 0 16px; }
+  .features { list-style: none; padding: 0; margin: 0 0 20px; flex: 1; color: #c4c9d4; font-size: 14px; }
+  .features li { margin-bottom: 10px; padding-left: 4px; }
+  a.cta {
+    display: block; text-align: center; margin-top: auto; background: linear-gradient(135deg, #7c6ff7, #5a4fd4);
+    color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600;
+  }
+  a.cta.secondary { background: transparent; border: 1px solid #2d3352; color: #e2e4f0; }
+  .hr { height: 1px; background: #2d3352; margin: 12px 0 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pantheon COO OS</h1>
+  <p>Autonomous AI Chief Operating Officer — built for global teams.</p>
+  <div class="badge" id="langBadge">Available in 12 languages</div>
+  <div class="lang">
+    <label for="landingLang">Language</label>
+    <select id="landingLang" onchange="onLandingLang(this.value)"></select>
+  </div>
+
+  <p class="pricing-title">Plans</p>
+  <p style="color:#8b92a8;font-size:14px;margin-top:-8px;">Toggle currency — prices update for major regions.</p>
+  <div class="currency-toggle" id="currencyToggle">
+    <button type="button" data-cur="INR" class="active">INR ₹</button>
+    <button type="button" data-cur="USD">USD $</button>
+    <button type="button" data-cur="EUR">EUR €</button>
+    <button type="button" data-cur="AED">AED د.إ</button>
+  </div>
+
+  <div class="pricing" id="priceGrid">
+    <div class="card" id="card-free">
+      <h3>Free</h3>
+      <div class="plan-name">FREE</div>
+      <div class="price" data-price-free>₹0/month</div>
+      <div class="hr"></div>
+      <ul class="features">
+        <li>✅ 20 tasks/month</li>
+        <li>✅ All 19+ tools</li>
+        <li>✅ Dashboard access</li>
+        <li>✅ Email support</li>
+        <li>✅ WhatsApp commands</li>
+      </ul>
+      <a class="cta secondary" href="/app">Start Free</a>
+    </div>
+    <div class="card popular" id="card-starter">
+      <span class="popular-pill">⭐ MOST POPULAR</span>
+      <h3>Starter</h3>
+      <div class="plan-name">STARTER</div>
+      <div class="price" data-price-starter>₹2,999/month</div>
+      <div class="hr"></div>
+      <ul class="features">
+        <li>✅ 100 tasks/month</li>
+        <li>✅ Everything in Free</li>
+        <li>✅ Task templates</li>
+        <li>✅ Scheduler (cron jobs)</li>
+        <li>✅ Google Sheets integration</li>
+        <li>✅ Priority support</li>
+        <li>✅ Daily briefings</li>
+      </ul>
+      <a class="cta" href="/app">Start Starter</a>
+    </div>
+    <div class="card" id="card-pro">
+      <h3>Pro</h3>
+      <div class="plan-name">PRO</div>
+      <div class="price" data-price-pro>₹9,999/month</div>
+      <div class="hr"></div>
+      <ul class="features">
+        <li>✅ Unlimited tasks</li>
+        <li>✅ Everything in Starter</li>
+        <li>✅ Slack + Telegram bots</li>
+        <li>✅ Voice commands (WhatsApp)</li>
+        <li>✅ Custom tool builder</li>
+        <li>✅ Analytics dashboard</li>
+        <li>✅ Webhook integration</li>
+        <li>✅ Dedicated support</li>
+        <li>✅ SLA guarantee</li>
+      </ul>
+      <a class="cta" href="/app">Start Pro</a>
+    </div>
+  </div>
+
+  <a class="cta" href="/app" style="display:inline-block;margin-top:40px;">Open dashboard</a>
+</div>
+<script>
+const PLAN_LABELS = {
+  INR: { sym: '₹', free: '₹0/month', starter: '₹2,999/month', pro: '₹9,999/month' },
+  USD: { sym: '$', free: '$0/month', starter: '$39/month', pro: '$99/month' },
+  EUR: { sym: '€', free: '€0/month', starter: '€37/month', pro: '€92/month' },
+  AED: { sym: 'AED ', free: 'AED 0/month', starter: 'AED 149/month', pro: 'AED 369/month' },
+};
+
+function setCurrency(cur) {
+  const L = PLAN_LABELS[cur] || PLAN_LABELS.INR;
+  document.querySelectorAll('[data-price-free]').forEach((el) => { el.textContent = L.free; });
+  document.querySelectorAll('[data-price-starter]').forEach((el) => { el.textContent = L.starter; });
+  document.querySelectorAll('[data-price-pro]').forEach((el) => { el.textContent = L.pro; });
+  document.querySelectorAll('#currencyToggle button').forEach((b) => {
+    b.classList.toggle('active', b.getAttribute('data-cur') === cur);
+  });
+}
+
+document.getElementById('currencyToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-cur]');
+  if (!btn) return;
+  setCurrency(btn.getAttribute('data-cur'));
+});
+
+async function onLandingLang(code) {
+  try {
+    const r = await fetch('/i18n/languages');
+    const d = await r.json();
+    const n = (d.languages || []).find((x) => x.code === code);
+    document.getElementById('langBadge').textContent =
+      'Available in 12 languages — ' + (n ? n.name : code);
+  } catch (_) {}
+}
+(async function init() {
+  try {
+    const r = await fetch('/i18n/languages');
+    const d = await r.json();
+    const sel = document.getElementById('landingLang');
+    (d.languages || []).forEach((l) => {
+      const o = document.createElement('option');
+      o.value = l.code;
+      o.textContent = (l.flag || '') + ' ' + l.name;
+      sel.appendChild(o);
+    });
+    sel.value = 'en';
+  } catch (_) {}
+  setCurrency('INR');
+})();
+</script>
+</body>
+</html>

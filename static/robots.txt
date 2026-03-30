@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /landing
+Disallow: /admin
+Disallow: /auth
+Sitemap: https://pantheon.ai/sitemap.xml

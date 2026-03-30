@@ -1,0 +1,21 @@
+# .dockerignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+*.env.local
+.git/
+.gitignore
+*.md
+*.sh
+pantheon_v2.db
+/tmp/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+node_modules/

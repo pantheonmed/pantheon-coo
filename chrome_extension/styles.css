@@ -1,0 +1,32 @@
+body {
+  width: 320px;
+  padding: 12px;
+  font-family: system-ui, sans-serif;
+  background: #0f1117;
+  color: #e8eaef;
+}
+h1 { font-size: 16px; color: #7c6ff7; margin: 0 0 12px; }
+label { display: block; font-size: 11px; color: #8b92a8; margin-top: 8px; }
+input, textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  background: #1a1d27;
+  border: 1px solid #2a2f3d;
+  color: #e8eaef;
+  border-radius: 6px;
+  padding: 8px;
+}
+button {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px;
+  background: #7c6ff7;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#tasks { margin-top: 12px; font-size: 12px; }
+.t { padding: 6px 0; border-bottom: 1px solid #2a2f3d; }

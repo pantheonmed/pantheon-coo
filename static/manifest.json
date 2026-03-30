@@ -1,0 +1,16 @@
+{
+  "name": "Pantheon COO",
+  "short_name": "COO",
+  "description": "Autonomous AI Chief Operating Officer",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#7c6ff7",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

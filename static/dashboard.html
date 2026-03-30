@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantheon COO OS</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #1a1d27;
+      --border: #2a2f3d;
+      --text: #e8eaef;
+      --muted: #8b92a8;
+      --accent: #7c6ff7;
+      --accent-dim: #5a4fd4;
+      --green: #3dd68c;
+      --red: #f56565;
+      --gray: #6b7280;
+      --amber: #f6ad55;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    a { color: var(--accent); cursor: pointer; }
+    a:hover { text-decoration: underline; }
+    input, textarea, select, button {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg2);
+      color: var(--text);
+    }
+    input, textarea, select { width: 100%; padding: 10px 12px; }
+    textarea { resize: vertical; min-height: 100px; }
+    button {
+      padding: 10px 18px;
+      cursor: pointer;
+      border: none;
+      font-weight: 600;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-ghost:hover { background: var(--bg2); }
+    .btn-danger { background: #742a2a; color: #feb2b2; }
+    .screen {
+      display: none;
+      min-height: 100vh;
+    }
+    .screen.active { display: flex; flex-direction: column; }
+    .auth-card {
+      max-width: 400px;
+      margin: auto;
+      padding: 32px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+    }
+    .auth-card h1 {
+      font-size: 1.35rem;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+    .auth-card p.muted { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .auth-links { margin-top: 20px; font-size: 14px; color: var(--muted); text-align: center; }
+    .err { color: var(--red); font-size: 13px; margin-top: 12px; }
+    /* Dashboard */
+    header.dash-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-wrap: wrap;
+    }
+    .logo { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
+    .logo span { color: var(--text); font-weight: 500; }
+    .header-spacer { flex: 1; }
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .plan-badge {
+      background: rgba(124, 111, 247, 0.2);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .lang-select { max-width: 140px; padding: 6px 10px; font-size: 12px; }
+    .icon-btn {
+      width: 40px; height: 40px;
+      padding: 0;
+      border-radius: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-size: 18px;
+    }
+    .dash-body { display: flex; flex: 1; min-height: 0; }
+    .left-panel {
+      width: 38%;
+      min-width: 300px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 12px;
+    }
+    .right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      overflow-x: auto;
+    }
+    .tab {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+      border: none;
+      background: transparent;
+    }
+    .tab.active { background: rgba(124, 111, 247, 0.15); color: var(--accent); }
+    .tab-content {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+      font-size: 13px;
+    }
+    .task-item {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      border-radius: 8px;
+      margin-bottom: 4px;
+    }
+    .task-item:hover { background: var(--bg2); }
+    .task-item.selected { outline: 1px solid var(--accent); background: rgba(124, 111, 247, 0.08); }
+    .task-goal { font-weight: 500; margin-bottom: 4px; word-break: break-word; }
+    .task-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-queued, .badge-reasoning, .badge-planning { background: #374151; color: #d1d5db; }
+    .badge-executing, .badge-evaluating { background: rgba(246, 173, 85, 0.2); color: var(--amber); }
+    .badge-done { background: rgba(61, 214, 140, 0.2); color: var(--green); }
+    .badge-failed { background: rgba(245, 101, 101, 0.2); color: var(--red); }
+    .log-line {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      word-break: break-word;
+    }
+    .log-line .lv { color: var(--muted); margin-right: 8px; }
+    .empty { color: var(--muted); padding: 24px; text-align: center; }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 420px;
+      width: 100%;
+      padding: 24px;
+    }
+    .modal h2 { margin-bottom: 16px; font-size: 1.1rem; }
+    .modal .row { margin-bottom: 14px; font-size: 14px; }
+    .modal .row b { color: var(--muted); display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
+    .tour-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.72); pointer-events: auto;
+    }
+    .tour-overlay.open { display: flex; align-items: flex-end; justify-content: center; padding: 24px; }
+    .tour-card {
+      background: var(--bg2); border: 1px solid var(--accent); border-radius: 16px;
+      padding: 20px; max-width: 440px; width: 100%; margin-bottom: 10vh;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    .tour-highlight {
+      outline: 3px solid var(--accent) !important; outline-offset: 4px; border-radius: 10px;
+      position: relative; z-index: 205 !important;
+    }
+    .usage-wrap {
+      display: none; flex-direction: column; gap: 4px; min-width: 120px; max-width: 190px;
+      cursor: pointer; text-align: left;
+    }
+    .usage-bar-outer {
+      height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .usage-bar-fill { height: 100%; width: 0%; transition: width 0.25s, background 0.25s; border-radius: 4px; }
+    .usage-bar-fill.green { background: var(--green); }
+    .usage-bar-fill.amber { background: var(--amber); }
+    .usage-bar-fill.red { background: var(--red); }
+    #modal-upgrade-limit .upgrade-copy { font-size: 14px; color: var(--muted); margin: 10px 0; line-height: 1.45; }
+    .api-key-box {
+      font-family: monospace;
+      font-size: 11px;
+      word-break: break-all;
+      background: var(--bg);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    body.theme-medical {
+      --accent: #2dd4bf;
+      --accent-dim: #0d9488;
+    }
+    @media (max-width: 768px) {
+      .dash-body { flex-direction: column; }
+      .left-panel { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--border); max-height: 45vh; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="auth-card">
+    <h1>Pantheon COO OS</h1>
+    <p class="muted">Sign in to run commands and view tasks.</p>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="login-email" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password">
+    </div>
+    <button type="button" class="btn-primary" style="width:100%" id="btn-login">Login</button>
+    <div id="login-err" class="err" style="display:none"></div>
+    <div class="auth-links">
+      No account? <a id="link-register">Register</a>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER -->
+<div id="screen-register" class="screen">
+  <div class="auth-card">
+    <h1>Create account</h1>
+    <p class="muted">Register, then you’ll be signed in automatically.</p>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="reg-name" autocomplete="name" minlength="1">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="reg-email" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password (min 8 characters)</label>
+      <input type="password" id="reg-password" autocomplete="new-password" minlength="8">
+    </div>
+    <button type="button" class="btn-primary" style="width:100%" id="btn-register">Register</button>
+    <div id="reg-err" class="err" style="display:none"></div>
+    <div class="auth-links">
+      Already have an account? <a id="link-login">Login</a>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="screen-dashboard" class="screen">
+  <header class="dash-header">
+    <div class="logo">Pantheon <span>COO OS</span></div>
+    <div class="header-spacer"></div>
+    <div class="user-pill">
+      <span id="hdr-email">—</span>
+      <span class="plan-badge" id="hdr-plan">free</span>
+    </div>
+    <select id="team-switcher" title="Personal or team workspace" style="font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);max-width:140px;">
+      <option value="">Personal</option>
+    </select>
+    <div id="hdr-usage-wrap" class="usage-wrap" title="Usage — click to view plans">
+      <span id="hdr-usage-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">Tasks</span>
+      <div class="usage-bar-outer" aria-hidden="true"><div id="hdr-usage-fill" class="usage-bar-fill green"></div></div>
+      <span id="hdr-usage-text" style="font-size:11px;color:var(--muted);">—</span>
+    </div>
+    <select id="hdr-lang" class="lang-select" title="Language">
+      <option value="en">English</option>
+      <option value="hi">हिन्दी</option>
+      <option value="ar">العربية</option>
+      <option value="de">Deutsch</option>
+      <option value="fr">Français</option>
+      <option value="ja">日本語</option>
+    </select>
+    <button type="button" class="icon-btn" id="btn-settings" title="Settings">⚙</button>
+    <button type="button" class="btn-ghost" id="btn-logout">Logout</button>
+  </header>
+  <div class="dash-body">
+    <div class="left-panel">
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Command</label>
+      <textarea id="cmd-input" placeholder="Tell COO what to do..."></textarea>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn-primary" id="btn-execute">Execute</button>
+        <button type="button" class="btn-ghost" id="btn-dry">Dry run</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span style="font-size:12px;color:var(--muted);text-transform:uppercase;">Recent tasks</span>
+        <button type="button" class="btn-ghost" style="padding:6px 12px;font-size:12px;" id="btn-refresh-tasks">Refresh</button>
+      </div>
+      <div id="task-list" style="overflow:auto;flex:1;border:1px solid var(--border);border-radius:8px;background:var(--bg2);"></div>
+    </div>
+    <div class="right-panel">
+      <div class="tabs" id="tour-tabs-target">
+        <button type="button" class="tab active" data-tab="logs">Logs</button>
+        <button type="button" class="tab" data-tab="plan">Plan</button>
+        <button type="button" class="tab" data-tab="eval">Evaluation</button>
+        <button type="button" class="tab" data-tab="memory">Memory</button>
+        <button type="button" class="tab" data-tab="team" id="team-tab-btn">Team</button>
+        <button type="button" class="tab" data-tab="marketplace" id="marketplace-tab-btn">Marketplace</button>
+        <button type="button" class="tab" data-tab="insights" id="insights-tab-btn">Analytics+</button>
+        <button type="button" class="tab" data-tab="admin" id="admin-tab-btn" style="display:none;" title="Admin only">Admin <span class="admin-dot" style="color:var(--red);font-size:10px;">●</span></button>
+      </div>
+      <div class="tab-content" id="panel-content">
+        <div class="empty">Select a task from the list.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="modal-settings" class="modal-overlay">
+  <div class="modal">
+    <h2>Settings</h2>
+    <div class="row"><b>Plan</b><span id="set-plan">—</span></div>
+    <div class="row"><b>Email</b><span id="set-email">—</span></div>
+    <div class="row"><b>API key</b><div class="api-key-box" id="set-apikey">—</div></div>
+    <div class="row">
+      <b>Language</b>
+      <select id="set-lang" style="margin-top:6px;"></select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button type="button" class="btn-danger" id="set-logout">Logout</button>
+      <button type="button" class="btn-ghost" style="margin-left:auto" id="set-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade prompt (free / limited plans) -->
+<div id="modal-upgrade-limit" class="modal-overlay">
+  <div class="modal" style="max-width:440px;">
+    <h2 style="margin-bottom:8px;">Upgrade</h2>
+    <p class="upgrade-copy" id="upgrade-limit-msg">You've used 20/20 free tasks this month.</p>
+    <p class="upgrade-copy">Upgrade to Starter for ₹2,999/month and get 100 tasks + priority support.</p>
+    <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+      <button type="button" class="btn-ghost" id="upgrade-maybe-later">Maybe Later</button>
+      <button type="button" class="btn-primary" id="upgrade-now-btn" style="margin-left:auto;">Upgrade Now →</button>
+    </div>
+  </div>
+</div>
+
+<!-- First-login onboarding tour -->
+<div id="tour-overlay" class="tour-overlay">
+  <div class="tour-card">
+    <p id="tour-step-text" style="margin:0 0 16px;font-size:15px;line-height:1.55;"></p>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button type="button" class="btn-ghost" id="tour-skip">Skip Tour</button>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn-ghost" id="tour-back" style="display:none;">← Back</button>
+        <button type="button" class="btn-primary" id="tour-next">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const API = (typeof window !== 'undefined' && window.PANTHEON_CONFIG && window.PANTHEON_CONFIG.apiUrl)
+    ? String(window.PANTHEON_CONFIG.apiUrl).replace(/\/$/, '')
+    : 'http://localhost:8002';
+  const TOKEN_KEY = 'coo_token';
+  const PROFILE_KEY = 'coo_profile';
+  const THEME_KEY = 'pantheon_theme';
+  const TOUR_KEY = 'tour_completed';
+
+  function usageBarColor(pct) {
+    if (pct >= 90) return 'red';
+    if (pct >= 60) return 'amber';
+    return 'green';
+  }
+
+  function setDashboardTheme(name) {
+    try {
+      document.body.classList.remove('theme-medical');
+      if (name === 'medical') document.body.classList.add('theme-medical');
+      localStorage.setItem(THEME_KEY, name || 'default');
+    } catch (e) {}
+  }
+
+  async function loadBranding() {
+    try {
+      var r = await fetch(API + '/config/branding');
+      if (!r.ok) return;
+      var b = await r.json();
+      if (b.primary_color) document.documentElement.style.setProperty('--accent', b.primary_color);
+    } catch (e) {}
+  }
+
+  async function checkAuthMode() {
+    try {
+      const r = await fetch(API + '/health');
+      const d = await r.json();
+      return d;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  /** Bearer only when logged in; AUTH_MODE=none works without a token. */
+  function authHeaders() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+
+  async function apiFetch(path, options) {
+    const opts = options || {};
+    const method = opts.method || 'GET';
+    const headers = { ...authHeaders() };
+    const init = { method, headers };
+    if (opts.body !== undefined) init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+    return fetch(API + path, init);
+  }
+
+  function saveSession(token, profile) {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (profile) localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }
+
+  function loadProfile() {
+    try {
+      return JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function clearSession() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+  }
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(function (el) {
+      el.classList.toggle('active', el.id === id);
+    });
+  }
+
+  function esc(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    var t = new Date(iso).getTime();
+    if (isNaN(t)) return '';
+    var sec = Math.floor((Date.now() - t) / 1000);
+    if (sec < 60) return sec + 's ago';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+    return Math.floor(sec / 86400) + 'd ago';
+  }
+
+  function statusClass(st) {
+    st = (st || 'queued').toLowerCase();
+    if (st === 'done') return 'badge-done';
+    if (st === 'failed') return 'badge-failed';
+    if (st === 'executing' || st === 'evaluating') return 'badge-executing';
+    return 'badge-queued';
+  }
+
+  /* ——— Auth screens ——— */
+  document.getElementById('link-register').onclick = function () {
+    document.getElementById('login-err').style.display = 'none';
+    showScreen('screen-register');
+  };
+  document.getElementById('link-login').onclick = function () {
+    document.getElementById('reg-err').style.display = 'none';
+    showScreen('screen-login');
+  };
+
+  document.getElementById('btn-login').onclick = async function () {
+    var err = document.getElementById('login-err');
+    err.style.display = 'none';
+    var email = document.getElementById('login-email').value.trim();
+    var password = document.getElementById('login-password').value;
+    if (!email || !password) {
+      err.textContent = 'Email and password required.';
+      err.style.display = 'block';
+      return;
+    }
+    try {
+      var resp = await fetch(API + '/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: password })
+      });
+      var data = await resp.json().catch(function () { return {}; });
+      if (!resp.ok) {
+        err.textContent = data.detail || resp.statusText || 'Login failed';
+        err.style.display = 'block';
+        return;
+      }
+      if (!data.token) {
+        err.textContent = 'No token in response';
+        err.style.display = 'block';
+        return;
+      }
+      saveSession(data.token, {
+        email: data.email,
+        name: data.name,
+        plan: data.plan || 'free',
+        role: data.role || 'user',
+        api_key: data.api_key || '',
+        language: data.language || 'en'
+      });
+      enterDashboard();
+    } catch (e) {
+      err.textContent = e.message || 'Network error';
+      err.style.display = 'block';
+    }
+  };
+
+  document.getElementById('btn-register').onclick = async function () {
+    var err = document.getElementById('reg-err');
+    err.style.display = 'none';
+    var name = document.getElementById('reg-name').value.trim();
+    var email = document.getElementById('reg-email').value.trim();
+    var password = document.getElementById('reg-password').value;
+    if (!name || !email || password.length < 8) {
+      err.textContent = 'Name, email, and password (8+ chars) required.';
+      err.style.display = 'block';
+      return;
+    }
+    try {
+      var resp = await fetch(API + '/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          email: email,
+          password: password,
+          industry: 'other'
+        })
+      });
+      var data = await resp.json().catch(function () { return {}; });
+      if (!resp.ok) {
+        err.textContent = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data);
+        err.style.display = 'block';
+        return;
+      }
+      var loginResp = await fetch(API + '/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: password })
+      });
+      var loginData = await loginResp.json().catch(function () { return {}; });
+      if (!loginResp.ok || !loginData.token) {
+        err.textContent = 'Registered but auto-login failed. Please sign in manually.';
+        err.style.display = 'block';
+        showScreen('screen-login');
+        document.getElementById('login-email').value = email;
+        return;
+      }
+      saveSession(loginData.token, {
+        email: loginData.email,
+        name: loginData.name,
+        plan: loginData.plan || 'free',
+        role: loginData.role || 'user',
+        api_key: loginData.api_key || data.api_key || '',
+        language: loginData.language || 'en'
+      });
+      enterDashboard();
+    } catch (e) {
+      err.textContent = e.message || 'Network error';
+      err.style.display = 'block';
+    }
+  };
+
+  /* ——— Dashboard ——— */
+  var selectedTaskId = null;
+  var currentTask = null;
+  var pollTasksTimer = null;
+  var pollDetailTimer = null;
+  var activeTab = 'logs';
+
+  function updateAdminTabVisibility() {
+    var btn = document.getElementById('admin-tab-btn');
+    if (!btn) return;
+    var p = loadProfile();
+    btn.style.display = (p.role === 'admin') ? '' : 'none';
+  }
+
+  function updateHeaderFromProfile() {
+    var p = loadProfile();
+    document.getElementById('hdr-email').textContent = p.email || '—';
+    document.getElementById('hdr-plan').textContent = (p.plan || 'free').toString();
+    if (p.language && document.getElementById('hdr-lang').querySelector('option[value="' + p.language + '"]')) {
+      document.getElementById('hdr-lang').value = p.language;
+    }
+    updateAdminTabVisibility();
+  }
+
+  async function refreshMe() {
+    try {
+      var r = await apiFetch('/auth/me');
+      if (!r.ok) return;
+      var me = await r.json();
+      var p = loadProfile();
+      p.email = me.email;
+      p.plan = me.plan;
+      p.name = me.name;
+      p.role = me.role || 'user';
+      if (me.language) p.language = me.language;
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+      updateHeaderFromProfile();
+      if (me.language && document.getElementById('hdr-lang').querySelector('option[value="' + me.language + '"]')) {
+        document.getElementById('hdr-lang').value = me.language;
+      }
+    } catch (e) { /* AUTH_MODE=none: /auth/me may 401 */ }
+  }
+
+  async function refreshUsageBar() {
+    var wrap = document.getElementById('hdr-usage-wrap');
+    if (!getToken()) { wrap.style.display = 'none'; return; }
+    try {
+      var r = await apiFetch('/billing/summary');
+      if (!r.ok) { wrap.style.display = 'none'; return; }
+      var d = await r.json();
+      var lim = d.tasks_limit;
+      var used = d.tasks_used_this_month;
+      if (lim == null || lim < 0) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'flex';
+      var pct = Math.min(100, Math.round((used / lim) * 100));
+      var col = usageBarColor(pct);
+      var fill = document.getElementById('hdr-usage-fill');
+      fill.style.width = pct + '%';
+      fill.className = 'usage-bar-fill ' + col;
+      document.getElementById('hdr-usage-text').textContent = used + '/' + lim;
+    } catch (e) {
+      wrap.style.display = 'none';
+    }
+  }
+
+  async function checkTaskLimitBeforeExecute() {
+    if (!getToken()) return true;
+    try {
+      var r = await apiFetch('/billing/summary');
+      if (!r.ok) return true;
+      var d = await r.json();
+      var lim = d.tasks_limit;
+      var used = d.tasks_used_this_month;
+      if (lim == null || lim < 0) return true;
+      if (used >= lim) {
+        var plan = (d.plan || 'free').toString();
+        document.getElementById('upgrade-limit-msg').textContent =
+          "You've used " + used + "/" + lim + " tasks this month on the " + plan + " plan.";
+        document.getElementById('modal-upgrade-limit').classList.add('open');
+        return false;
+      }
+    } catch (e) {}
+    return true;
+  }
+
+  var tourStep = 0;
+  var tourSteps = [
+    {
+      text: 'This is where you tell COO what to do. Type any task in plain English.',
+      target: 'cmd-input',
+      nextLabel: 'Next →'
+    },
+    {
+      text: 'Click Execute to start the task. COO will plan and execute automatically.',
+      target: 'btn-execute',
+      nextLabel: 'Next →'
+    },
+    {
+      text: 'Your recent tasks appear here. Click any task to see details.',
+      target: 'task-list',
+      nextLabel: 'Next →'
+    },
+    {
+      text: 'See Logs, Plan, Evaluation and Memory for each task. COO learns from every task!',
+      target: 'tour-tabs-target',
+      nextLabel: 'Try Your First Task →'
+    },
+    {
+      text: 'We prefilled a sample command. Click Execute to see COO work!',
+      target: 'cmd-input',
+      nextLabel: 'Execute Now',
+      isLast: true
+    }
+  ];
+
+  function tourClearHighlight() {
+    document.querySelectorAll('.tour-highlight').forEach(function (el) { el.classList.remove('tour-highlight'); });
+  }
+
+  function renderTour() {
+    var ov = document.getElementById('tour-overlay');
+    if (!ov.classList.contains('open')) return;
+    tourClearHighlight();
+    var step = tourSteps[tourStep];
+    if (!step) return;
+    document.getElementById('tour-step-text').textContent = step.text;
+    document.getElementById('tour-next').textContent = step.nextLabel || 'Next →';
+    document.getElementById('tour-back').style.display = tourStep > 0 ? 'inline-block' : 'none';
+    var el = document.getElementById(step.target);
+    if (el) el.classList.add('tour-highlight');
+  }
+
+  function tourComplete() {
+    try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
+    document.getElementById('tour-overlay').classList.remove('open');
+    tourClearHighlight();
+  }
+
+  function maybeStartTour() {
+    try {
+      if (localStorage.getItem(TOUR_KEY)) return;
+      if (!getToken()) return;
+      tourStep = 0;
+      document.getElementById('tour-overlay').classList.add('open');
+      renderTour();
+    } catch (e) {}
+  }
+
+  document.getElementById('tour-skip').onclick = function () { tourComplete(); };
+  document.getElementById('tour-back').onclick = function () {
+    if (tourStep > 0) { tourStep--; renderTour(); }
+  };
+  document.getElementById('tour-next').onclick = async function () {
+    var step = tourSteps[tourStep];
+    if (step && step.isLast) {
+      tourComplete();
+      await executeCommand(false);
+      return;
+    }
+    if (tourStep < tourSteps.length - 1) {
+      tourStep++;
+      if (tourStep === tourSteps.length - 1) {
+        document.getElementById('cmd-input').value = 'Check my system health and save a report';
+      }
+      renderTour();
+    }
+  };
+
+  document.getElementById('hdr-usage-wrap').onclick = function () {
+    window.location.href = '/landing';
+  };
+  document.getElementById('upgrade-maybe-later').onclick = function () {
+    document.getElementById('modal-upgrade-limit').classList.remove('open');
+  };
+  document.getElementById('modal-upgrade-limit').onclick = function (e) {
+    if (e.target.id === 'modal-upgrade-limit') document.getElementById('modal-upgrade-limit').classList.remove('open');
+  };
+  document.getElementById('upgrade-now-btn').onclick = async function () {
+    document.getElementById('modal-upgrade-limit').classList.remove('open');
+    try {
+      var r = await apiFetch('/billing/create-order', { method: 'POST', body: { plan: 'starter' } });
+      var data = await r.json().catch(function () { return {}; });
+      if (!r.ok) {
+        alert(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data));
+        return;
+      }
+      if (data.gateway === 'razorpay') {
+        alert('Razorpay order created. Complete checkout in-app (key + order id returned by API) or use API docs.');
+      } else if (data.gateway === 'stripe') {
+        alert('Stripe PaymentIntent created. Use client_secret with Stripe.js or your billing flow.');
+      }
+    } catch (e) {
+      alert(e.message || 'Upgrade request failed');
+    }
+  };
+
+  async function shareTask(tid) {
+    try {
+      var r = await apiFetch('/tasks/' + encodeURIComponent(tid) + '/share', { method: 'POST', body: {} });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok) {
+        alert(typeof d.detail === 'string' ? d.detail : 'Share requires sign-in (JWT user).');
+        return;
+      }
+      var url = d.share_url || '';
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('Share link copied to clipboard.\n' + url);
+      } catch (e) {
+        prompt('Copy share URL:', url);
+      }
+    } catch (e) {
+      alert(e.message || 'Share failed');
+    }
+  }
+
+  async function refreshTaskWatchers(tasks) {
+    for (var i = 0; i < tasks.length; i++) {
+      var tid = tasks[i].task_id;
+      try {
+        var rw = await apiFetch('/tasks/' + encodeURIComponent(tid) + '/watchers');
+        if (!rw.ok) continue;
+        var wd = await rw.json();
+        var wel = document.getElementById('wc-' + tid);
+        if (wel) wel.textContent = (wd.watching || 0) + ' watching';
+      } catch (e) {}
+    }
+  }
+
+  async function loadTaskList() {
+    var el = document.getElementById('task-list');
+    try {
+      var r = await apiFetch('/tasks?limit=30');
+      if (!r.ok) {
+        el.innerHTML = '<div class="empty">Could not load tasks (' + r.status + ')</div>';
+        return;
+      }
+      var data = await r.json();
+      var tasks = data.tasks || [];
+      if (tasks.length === 0) {
+        el.innerHTML = '<div class="empty">No tasks yet.</div>';
+        return;
+      }
+      el.innerHTML = tasks.map(function (t) {
+        var sel = t.task_id === selectedTaskId ? ' selected' : '';
+        return (
+          '<div class="task-item' + sel + '">' +
+          '<div class="task-main" data-id="' + esc(t.task_id) + '" style="cursor:pointer">' +
+          '<div class="task-goal">' + esc(t.goal || t.task_id) + '</div>' +
+          '<div class="task-meta">' +
+          '<span class="badge ' + statusClass(t.status) + '">' + esc(t.status) + '</span>' +
+          '<span>' + esc(timeAgo(t.created_at)) + '</span>' +
+          '</div></div>' +
+          '<div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+          '<button type="button" class="btn-ghost" style="padding:4px 10px;font-size:11px" data-share="' + esc(t.task_id) + '">Share</button>' +
+          '<span id="wc-' + esc(t.task_id) + '" style="font-size:11px;color:var(--muted)">—</span>' +
+          '</div></div>'
+        );
+      }).join('');
+      el.querySelectorAll('.task-main').forEach(function (node) {
+        node.onclick = function () {
+          selectTask(node.getAttribute('data-id'));
+        };
+      });
+      el.querySelectorAll('[data-share]').forEach(function (btn) {
+        btn.onclick = function (ev) {
+          ev.stopPropagation();
+          shareTask(btn.getAttribute('data-share'));
+        };
+      });
+      refreshTaskWatchers(tasks);
+    } catch (e) {
+      el.innerHTML = '<div class="empty">Error loading tasks</div>';
+    }
+  }
+
+  async function loadTaskDetail() {
+    if (!selectedTaskId) return;
+    try {
+      var r = await apiFetch('/tasks/' + encodeURIComponent(selectedTaskId));
+      if (!r.ok) return;
+      currentTask = await r.json();
+      renderPanel();
+    } catch (e) {}
+  }
+
+  async function loadLogsHtml() {
+    if (!selectedTaskId) return '<div class="empty">No task selected.</div>';
+    try {
+      var r = await apiFetch('/tasks/' + encodeURIComponent(selectedTaskId) + '/logs');
+      if (!r.ok) return '<div class="empty">Logs unavailable (' + r.status + ')</div>';
+      var data = await r.json();
+      var logs = data.logs || [];
+      if (logs.length === 0) return '<div class="empty">No log lines yet.</div>';
+      return logs.map(function (L) {
+        return '<div class="log-line"><span class="lv">' + esc(L.level) + '</span>' + esc(L.message) + '</div>';
+      }).join('');
+    } catch (e) {
+      return '<div class="empty">Failed to load logs</div>';
+    }
+  }
+
+  function renderPlanHtml() {
+    if (!currentTask) return '<div class="empty">No task data.</div>';
+    var plan = currentTask.plan;
+    if (!plan || !plan.steps || !plan.steps.length) {
+      return '<div class="empty">No plan yet.</div>';
+    }
+    var html = (plan.goal_summary ? '<p style="margin-bottom:12px;color:var(--muted)">' + esc(plan.goal_summary) + '</p>' : '');
+    html += '<ol style="padding-left:20px;">';
+    plan.steps.forEach(function (s) {
+      html += '<li style="margin-bottom:10px;"><b>#' + esc(s.step_id) + '</b> ' + esc(s.tool) + '.' + esc(s.action) +
+        (s.description ? '<br><span style="color:var(--muted);font-size:12px">' + esc(s.description) + '</span>' : '') +
+        '<br><span style="font-size:11px;color:var(--muted)">' + esc(s.status || '') + '</span></li>';
+    });
+    html += '</ol>';
+    return html;
+  }
+
+  function renderEvalHtml() {
+    if (!currentTask) return '<div class="empty">No task data.</div>';
+    var score = currentTask.evaluation_score;
+    if (score == null && !currentTask.summary) {
+      return '<div class="empty">No evaluation yet.</div>';
+    }
+    var h = '';
+    if (score != null) h += '<p style="font-size:2rem;font-weight:700;color:var(--accent);margin-bottom:12px;">' + Number(score).toFixed(2) + '</p>';
+    h += '<p>' + esc(currentTask.summary || '') + '</p>';
+    if (currentTask.error) h += '<p style="color:var(--red);margin-top:12px;">' + esc(currentTask.error) + '</p>';
+    return h;
+  }
+
+  async function loadAdminPanelHtml() {
+    try {
+      var r = await apiFetch('/admin/dashboard-stats');
+      if (!r.ok) return '<div class="empty">Admin dashboard unavailable (' + r.status + ')</div>';
+      var d = await r.json();
+      var er = await apiFetch('/admin/errors?limit=10');
+      var errs = er.ok ? ((await er.json()).errors || []) : [];
+      var h = '<div class="admin-dashboard" style="font-size:13px;">';
+      h += '<h3 style="color:var(--accent);margin-bottom:8px;">System health</h3>';
+      h += '<pre style="background:var(--bg);padding:12px;border-radius:8px;overflow:auto;">' + esc(JSON.stringify(d.system, null, 2)) + '</pre>';
+      h += '<h3 style="color:var(--accent);margin:16px 0 8px;">User metrics</h3>';
+      h += '<pre style="background:var(--bg);padding:12px;border-radius:8px;overflow:auto;">' + esc(JSON.stringify(d.users, null, 2)) + '</pre>';
+      h += '<div style="margin:12px 0;display:flex;flex-wrap:wrap;gap:12px;">';
+      var pb = d.users && d.users.plan_breakdown ? d.users.plan_breakdown : {};
+      Object.keys(pb).forEach(function (k) {
+        var n = pb[k];
+        var w = Math.min(100, Math.max(8, n * 5));
+        h += '<div style="flex:1;min-width:80px;"><div style="font-size:11px;color:var(--muted);">' + esc(k) + '</div>';
+        h += '<div style="height:8px;background:var(--border);border-radius:4px;"><div style="width:' + w + '%;height:8px;background:var(--accent);border-radius:4px;"></div></div>';
+        h += '<div style="font-size:12px;">' + esc(String(n)) + '</div></div>';
+      });
+      h += '</div>';
+      h += '<h3 style="color:var(--accent);margin:16px 0 8px;">Revenue</h3>';
+      h += '<pre style="background:var(--bg);padding:12px;border-radius:8px;">' + esc(JSON.stringify(d.revenue, null, 2)) + '</pre>';
+      h += '<h3 style="color:var(--accent);margin:16px 0 8px;">Usage</h3>';
+      h += '<pre style="background:var(--bg);padding:12px;border-radius:8px;">' + esc(JSON.stringify(d.usage, null, 2)) + '</pre>';
+      h += '<h3 style="color:var(--accent);margin:16px 0 8px;">Activity</h3>';
+      h += '<ul style="padding-left:18px;color:var(--muted);">';
+      (d.activity_feed || []).slice(0, 20).forEach(function (a) {
+        h += '<li style="margin-bottom:6px;">' + esc(a.message || '') + ' <span style="font-size:11px;">' + esc(timeAgo(a.at)) + '</span></li>';
+      });
+      h += '</ul>';
+      h += '<h3 style="color:var(--accent);margin:16px 0 8px;">Recent errors</h3>';
+      if (errs.length === 0) h += '<div class="empty">No recent errors.</div>';
+      else {
+        errs.forEach(function (e) {
+          var col = e.type === 'HTTPException' ? 'var(--amber)' : 'var(--red)';
+          h += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;">';
+          h += '<div style="color:' + col + ';font-weight:600;">' + esc(e.type) + '</div>';
+          h += '<div style="font-size:12px;color:var(--muted);">' + esc((e.message || '').slice(0, 200)) + '</div>';
+          h += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">' + esc(timeAgo(e.timestamp)) + (e.task_id ? ' · task ' + esc(String(e.task_id).slice(0, 8)) : '') + '</div>';
+          h += '<button type="button" class="btn-ghost" style="margin-top:6px;padding:4px 10px;font-size:11px;">View details</button>';
+          h += '</div>';
+        });
+      }
+      h += '<h3 style="color:var(--accent);margin:16px 0 8px;">Quick actions</h3>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+      h += '<button type="button" class="btn-ghost" onclick="alert(\'Connect email broadcast workflow (configure RESEND/SMTP).\')">Send announcement</button>';
+      h += '<button type="button" class="btn-ghost" onclick="alert(\'Use GET /report or briefing endpoints.\')">Monthly report</button>';
+      h += '<button type="button" class="btn-ghost" onclick="alert(\'Run DB maintenance script / migration.\')">Clear old tasks</button>';
+      h += '<button type="button" class="btn-ghost" onclick="alert(\'Copy DB file from workspace or use sqlite .backup.\')">Backup DB</button>';
+      h += '</div></div>';
+      return h;
+    } catch (e) {
+      return '<div class="empty">Failed to load admin dashboard</div>';
+    }
+  }
+
+  async function renderMemoryHtml() {
+    try {
+      var r = await fetch(API + '/memory/learnings?limit=20', { headers: authHeaders() });
+      if (!r.ok) return '<div class="empty">Memory unavailable (' + r.status + ')</div>';
+      var data = await r.json();
+      var L = data.learnings || [];
+      if (L.length === 0) return '<div class="empty">No learnings yet.</div>';
+      return L.map(function (l) {
+        return '<div style="padding:12px;border-bottom:1px solid var(--border);">' +
+          '<div style="font-size:11px;color:var(--accent);">' + esc(l.goal_type) + '</div>' +
+          '<div>' + esc(l.learning) + '</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:6px;">score ' + esc(String(l.score)) + ' · ' + esc(timeAgo(l.created_at)) + '</div>' +
+          '</div>';
+      }).join('');
+    } catch (e) {
+      return '<div class="empty">Failed to load memory</div>';
+    }
+  }
+
+  async function renderPanel() {
+    var panel = document.getElementById('panel-content');
+    if (activeTab === 'admin') {
+      panel.innerHTML = await loadAdminPanelHtml();
+      return;
+    }
+    if (activeTab === 'team') {
+      panel.innerHTML = '<div id="team-dashboard-section"><h3 style="margin:0 0 8px;">Team workspace</h3><p class="muted" style="font-size:13px;">Switch between <b>Personal</b> and team in the header. Task rows show submitter initials.</p><div id="team-activity-feed" style="margin-top:12px;font-size:13px;">Team activity feed — connect via <code>/teams</code> API.</div></div>';
+      return;
+    }
+    if (activeTab === 'marketplace') {
+      panel.innerHTML = '<div id="marketplace-dashboard-section"><h3 style="margin:0 0 8px;">Marketplace</h3><p class="muted" style="font-size:13px;">Browse approved tools, search, install free tools, purchase via Razorpay. <code>GET /marketplace</code></p><div id="marketplace-my-tools" style="margin-top:12px;font-size:13px;">My published tools</div></div>';
+      return;
+    }
+    if (activeTab === 'insights') {
+      panel.innerHTML = '<div id="insights-v2-section" class="ai-insights"><h3 style="margin:0 0 8px;">Analytics v2 + AI Insights</h3><div class="insights-charts" style="display:grid;gap:10px;"><div style="border:1px solid var(--border);border-radius:8px;padding:10px;">Hourly productivity heatmap (placeholder)</div><div style="border:1px solid var(--border);border-radius:8px;padding:10px;">Tool usage treemap (CSS)</div><div style="border:1px solid var(--border);border-radius:8px;padding:10px;">Success trend (SVG)</div></div><ul id="insights-recommendations" style="margin-top:12px;"><li>Run weekly report from <code>/insights/weekly-report</code></li></ul></div>';
+      return;
+    }
+    if (!selectedTaskId) {
+      panel.innerHTML = '<div class="empty">Select a task from the list.</div>';
+      return;
+    }
+    if (activeTab === 'logs') panel.innerHTML = await loadLogsHtml();
+    else if (activeTab === 'plan') panel.innerHTML = renderPlanHtml();
+    else if (activeTab === 'eval') panel.innerHTML = renderEvalHtml();
+    else if (activeTab === 'memory') panel.innerHTML = await renderMemoryHtml();
+  }
+
+  function selectTask(id) {
+    selectedTaskId = id;
+    loadTaskList();
+    loadTaskDetail();
+  }
+
+  function setupTabs() {
+    document.querySelectorAll('.tab').forEach(function (tab) {
+      tab.onclick = async function () {
+        activeTab = tab.getAttribute('data-tab');
+        document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t === tab); });
+        await renderPanel();
+      };
+    });
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollTasksTimer = setInterval(loadTaskList, 3000);
+    pollDetailTimer = setInterval(async function () {
+      await loadTaskDetail();
+      if (activeTab === 'logs') document.getElementById('panel-content').innerHTML = await loadLogsHtml();
+      else if (activeTab === 'admin') document.getElementById('panel-content').innerHTML = await loadAdminPanelHtml();
+      else if (activeTab === 'team' || activeTab === 'marketplace' || activeTab === 'insights') await renderPanel();
+    }, 3000);
+  }
+
+  function stopPolling() {
+    if (pollTasksTimer) clearInterval(pollTasksTimer);
+    if (pollDetailTimer) clearInterval(pollDetailTimer);
+    pollTasksTimer = null;
+    pollDetailTimer = null;
+  }
+
+  async function executeCommand(dryRun) {
+    var cmd = document.getElementById('cmd-input').value.trim();
+    if (cmd.length < 3) {
+      alert('Command must be at least 3 characters.');
+      return;
+    }
+    if (!dryRun) {
+      var limOk = await checkTaskLimitBeforeExecute();
+      if (!limOk) return;
+    }
+    try {
+      var r = await apiFetch('/execute', {
+        method: 'POST',
+        body: { command: cmd, dry_run: dryRun, source: 'dashboard' }
+      });
+      var data = await r.json().catch(function () { return {}; });
+      if (!r.ok) {
+        alert(typeof data.detail === 'string' ? data.detail : JSON.stringify(data));
+        return;
+      }
+      document.getElementById('cmd-input').value = '';
+      selectedTaskId = data.task_id;
+      await loadTaskList();
+      await loadTaskDetail();
+      await renderPanel();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  function enterDashboard() {
+    showScreen('screen-dashboard');
+    updateHeaderFromProfile();
+    refreshMe();
+    setupTabs();
+    loadTaskList();
+    startPolling();
+    refreshUsageBar();
+    if (typeof window.__usageInterval !== 'undefined' && window.__usageInterval) {
+      clearInterval(window.__usageInterval);
+    }
+    window.__usageInterval = setInterval(refreshUsageBar, 60000);
+    setTimeout(maybeStartTour, 600);
+  }
+
+  function leaveDashboard() {
+    stopPolling();
+    selectedTaskId = null;
+    currentTask = null;
+    if (typeof window.__usageInterval !== 'undefined' && window.__usageInterval) {
+      clearInterval(window.__usageInterval);
+      window.__usageInterval = null;
+    }
+  }
+
+  document.getElementById('btn-execute').onclick = function () { executeCommand(false); };
+  document.getElementById('btn-dry').onclick = function () { executeCommand(true); };
+  document.getElementById('btn-refresh-tasks').onclick = function () { loadTaskList(); };
+
+  document.getElementById('btn-logout').onclick = async function () {
+    try { await apiFetch('/auth/logout', { method: 'POST', body: {} }); } catch (e) {}
+    leaveDashboard();
+    clearSession();
+    showScreen('screen-login');
+  };
+
+  document.getElementById('hdr-lang').onchange = async function () {
+    var code = this.value;
+    try {
+      var r = await apiFetch('/auth/me/language', { method: 'PATCH', body: { language: code } });
+      if (r.ok) {
+        var p = loadProfile();
+        p.language = code;
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+      }
+    } catch (e) {}
+  };
+
+  /* Settings modal */
+  function fillSettingsModal() {
+    var p = loadProfile();
+    document.getElementById('set-plan').textContent = p.plan || 'free';
+    document.getElementById('set-email').textContent = p.email || '—';
+    document.getElementById('set-apikey').textContent = p.api_key || '(not set)';
+    var sel = document.getElementById('set-lang');
+    sel.innerHTML = document.getElementById('hdr-lang').innerHTML;
+    sel.value = document.getElementById('hdr-lang').value;
+  }
+
+  document.getElementById('btn-settings').onclick = function () {
+    fillSettingsModal();
+    document.getElementById('modal-settings').classList.add('open');
+  };
+  document.getElementById('set-close').onclick = function () {
+    document.getElementById('modal-settings').classList.remove('open');
+  };
+  document.getElementById('modal-settings').onclick = function (e) {
+    if (e.target.id === 'modal-settings') document.getElementById('modal-settings').classList.remove('open');
+  };
+  document.getElementById('set-lang').onchange = async function () {
+    document.getElementById('hdr-lang').value = this.value;
+    document.getElementById('hdr-lang').dispatchEvent(new Event('change'));
+  };
+  document.getElementById('set-logout').onclick = document.getElementById('btn-logout').onclick;
+
+  /* Boot — skip login when API allows unauthenticated GET /tasks (e.g. AUTH_MODE=none) */
+  async function bootstrap() {
+    await loadBranding();
+    try {
+      var savedTheme = localStorage.getItem(THEME_KEY);
+      if (savedTheme) setDashboardTheme(savedTheme);
+    } catch (e) {}
+    await checkAuthMode();
+    if (getToken()) {
+      enterDashboard();
+      return;
+    }
+    try {
+      const r = await fetch(API + '/tasks?limit=1', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (r.status === 200) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.setItem(PROFILE_KEY, JSON.stringify({
+          email: 'Guest',
+          plan: 'open',
+          name: 'Developer',
+          api_key: '',
+          language: 'en'
+        }));
+        enterDashboard();
+        return;
+      }
+    } catch (e) {}
+    showScreen('screen-login');
+  }
+  bootstrap();
+})();
+</script>
+</body>
+</html>

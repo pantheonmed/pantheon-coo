@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pantheon-coo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pantheon-coo
+  template:
+    metadata:
+      labels:
+        app: pantheon-coo
+    spec:
+      containers:
+        - name: pantheon-coo
+          image: pantheonai/coo-os:latest
+          ports:
+            - containerPort: 8002
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pantheon-secrets
+                  key: anthropic-api-key
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8002
+            initialDelaySeconds: 30

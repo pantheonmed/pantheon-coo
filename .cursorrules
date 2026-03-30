@@ -1,0 +1,122 @@
+# Pantheon COO OS — Cursor / AI context
+
+## Stack
+- FastAPI backend (default port 8002), static `static/dashboard.html` (3002 via helper scripts)
+- SQLite via `memory/store.py` (schema in `SCHEMA`, migrations in `migrations/`)
+- Multi-agent loop: `orchestrator.py` → Reasoning → Plan → Execute → Evaluate → Memory (+ pattern/tool builder hooks)
+
+## Tests
+- Run: `python3 -m pytest tests/` (**550+** tests, 0 failures)
+- Do **not** use `asyncio.run()` inside pytest tests — it tears down the event loop and breaks `pytest-asyncio` for the rest of the session. Use `await` in `@pytest.mark.asyncio` tests or synchronous `sqlite3` for DB setup. (`pytest_collection_modifyitems` runs `test_task52_tracing` last; OpenTelemetry tests mock the SDK.)
+
+## Auth & limits
+- `security/auth.py` — `Depends(require_auth)` / **`Depends(require_admin)`**; **AUTH_MODE should be `jwt` for multi-user** (Bearer token or per-user `X-COO-API-Key`)
+- `security/user_auth.py` — bcrypt, JWT mint/verify, registration helpers
+- `security/rate_limit.py` — `Depends(rate_limit)` / `execute_rate_limit` (plan-based limits + optional Redis); `PLAN_RATE_LIMITS`; `GET /usage` for `rate_limits`
+
+## Notable HTTP endpoints
+- `POST /auth/register` (optional `industry`, `country_code`, `timezone`), `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `PATCH /auth/me/language`, `PATCH /auth/me/timezone`, `POST /auth/refresh`, `POST /auth/reset-api-key`
+- **i18n (public):** `GET /i18n/languages`, `GET /i18n/translations/{lang_code}`
+- **SEO / docs (public):** `GET /sitemap.xml`, `GET /robots.txt`, `GET /docs-page`
+- `GET /onboarding/suggested-commands`, **`GET /onboarding/samples?industry=`** (public), **`GET /tutorials`** (public), **`GET /onboarding/status`**, `GET /templates`, `GET /templates/{template_id}`, `POST /templates/{template_id}/run`
+- `POST /execute` — queue task (optional `team_id`; when **`DISTRIBUTED_TASK_QUEUE=true`**, enqueues via `taskqueue` workers and returns `queue_position`)
+- **`GET /ready`** — load-balancer readiness (503 if overloaded vs `max_queue_depth` when distributed queue on)
+- `GET /tasks/{id}`, `GET /tasks/{id}/logs`, `GET /tasks/{id}/stream` (SSE: logs + activity; multi-subscriber queues)
+- `GET /tasks/{id}/watchers`, `POST /tasks/{id}/share` — share links + live viewer count
+- `GET /shared/{token}`, `GET /shared/{token}/stream` — public read-only task + SSE
+- `POST /webhook/zapier` — Zapier trigger → queue task (`X-Zapier-Secret`)
+- `GET /stats` (auth + rate limit), `GET /usage` — plan + rate limit usage
+- `GET /report?period=24h|7d|30d` — performance summary + recommendation (Redis cache when enabled)
+- `GET /config/branding` (public), `GET`/`PATCH /admin/branding` (admin)
+- `POST /affiliate/join`, `GET /affiliate/dashboard`, `GET /affiliate/link`, `POST /affiliate/payout-request`, `GET /admin/affiliates`
+- `GET /memory/semantic`, `GET /memory/stats`, `DELETE /memory/semantic/{memory_id}`
+- `POST /projects`, `POST /briefing`, `/schedules`, `/monitor/*`, `/tools/*`
+- **Billing (Razorpay INR + Stripe global):** `GET /billing/plans?currency=`, `GET /billing/summary`, `POST /billing/create-order`, `POST /billing/verify-payment`, `GET /billing/history`, `POST /webhook/razorpay`, `POST /webhook/stripe`
+- **Telegram:** `POST /webhook/telegram`, `GET /webhook/telegram/setup`
+- **Admin analytics:** `GET /admin/analytics`, `GET /admin/analytics/export` (CSV; admin JWT); **`GET /admin/dashboard-stats`**, **`GET /admin/errors`**, **`GET /admin/audit-logs`**, **`GET /admin/ml/*`**, **`GET /admin/marketplace/pending`**, **`PATCH /admin/marketplace/{tool_id}/approve`** (admin JWT)
+- **Teams:** `POST /teams`, `POST /teams/{id}/invite`, `POST /teams/join`, `GET /teams/{id}/members`, `GET /teams/{id}/tasks`, `PATCH /teams/{id}/tasks/{task_id}/assign`, `DELETE /teams/{id}/members/{user_id}`
+- **Marketplace (public list):** `GET /marketplace`, `GET /marketplace/{tool_id}`; **auth:** `POST /marketplace/publish`, `POST /marketplace/{tool_id}/purchase`, `POST /marketplace/{tool_id}/rate`, `GET /marketplace/earnings`
+- **Insights:** `POST /insights/weekly-report`, `GET /insights/automation-opportunities`, `GET /insights/predict`
+- **SAML (stub):** `GET /auth/saml/login`, `POST /auth/saml/callback` (enable with `SAML_ENABLED`)
+- **User webhooks:** `POST /webhooks`, `GET /webhooks`, `DELETE /webhooks/{webhook_id}`, `GET /webhooks/{webhook_id}/logs`
+- **PWA / app shell:** `GET /app`, static `/static/manifest.json`, `/static/icon.svg` (also under `/static/*` mount)
+- **Voice:** `POST /voice/transcribe` (multipart; optional `auto_execute`), `GET /voice/speak?text=`
+- **Brand:** `POST /brand/strategy`, `POST /brand/viral-ideas`, `POST /brand/content-pack` (auth required)
+
+## New modules
+- `templates.py` — built-in task templates (incl. PantheonMed medical vertical)
+- `billing.py` — Razorpay (INR) + Stripe (global) orders, verify, webhooks
+- `i18n/` — UI strings, 12 languages; `utils/timezone.py`, `utils/locale_format.py` — regional time + formatting
+- `security/user_auth.py` — multi-user passwords, JWT, API keys
+- `performance_report.py` — builds `/report` payload; recommendation cached ~300s
+- `agents/model_router.py` — `get_model_usage_counts()` for report
+- `tools/google_sheets.py` — Google Sheets API tool (service account)
+- `telegram_bot.py` — Telegram webhook router + setup helper
+- `analytics.py` — product analytics `track()` + admin aggregates / CSV export
+- `webhook_sender.py` — outbound HTTPS webhooks with HMAC
+- `agents/suggester.py` — post-task command suggestions
+- `memory/db_pool.py` — SQLite connection pool + slow-query logging
+- `scripts/load_test.py` — concurrent load smoke test
+- `static/manifest.json`, `static/icon.svg` — PWA metadata
+- `agents/voice.py` — Whisper transcription + OpenAI TTS
+- `tools/market_data.py` — Yahoo Finance quotes / history / news / screener
+- `agents/trading_analyst.py` — educational market analysis JSON (disclaimer)
+- `tools/website_builder.py`, `agents/website_generator.py` — HTML sites in workspace
+- `tools/content_creator.py` — marketing copy → markdown
+- `tools/finance.py` — GST, invoices, P&L, cashflow (Python math)
+- `tools/code_builder.py`, `agents/code_agent.py` — scaffolds + review/tests/docstrings
+- `tools/phone.py` — Twilio calls + SMS + conference + recording + callback schedules
+- `agents/call_agent.py` — phone script generation
+- `tools/linkedin.py`, `tools/instagram.py`, `tools/twitter.py`, `tools/gem_portal.py` — growth / government helpers
+- `api_batch.py` — teams, marketplace, insights, ML admin, SAML stub routes
+- `insights_engine.py` — weekly insights + prediction + automation suggestions
+- `ml/` — training data export + config
+- `taskqueue/` — in-process task queue + worker loop (optional)
+- `k8s/` — Deployment / Service / HPA + README
+- `tools/database.py` — sandboxed SQL (SQLite workspace; Postgres/MySQL + `DATABASE_WHITELIST`)
+- `tools/pdf_generator.py` — reportlab PDFs
+- `tools/image_analyzer.py` — Claude vision / OCR
+- `tools/researcher.py` — Google News RSS + synthesis + schedule hooks
+- `tools/security_scanner.py` — SSL, headers, password strength, audit markdown
+- `tools/compliance.py` — GSTIN/PAN, checklists, NDA/MOU templates (disclaimer)
+- `tools/deployer.py` — Railway / Vercel CLI, GitHub API, git push, URL health check
+- `tools/video_generator.py` — scripts, HTML/ffmpeg slideshow, social hooks
+- `tools/notion.py` — Notion API pages / search / DB rows
+- `tools/zoho_crm.py` — Zoho CRM `.in` REST
+- `tools/google_calendar.py` — Google Calendar v3 (service account)
+- `memory/db_pool.py` — optional PostgreSQL via `DATABASE_URL` + `POSTGRES_STORE_ENABLED`
+- `memory/redis_client.py` — async Redis + HTTP response cache helpers + **`cached()`** async decorator
+- `monitoring/error_tracker.py` — in-process error log, critical alerts, health counters
+- `tools/lazy_loader.py` — lazy `importlib` load for `tools.*` modules
+- `memory/semantic_store.py` — long-term semantic memories (tags + recall)
+- `monitoring/tracing.py` — OpenTelemetry `init_tracing` / `span`
+- `branding_runtime.py` — white-label overrides from `branding.json`
+- `tools/tally.py` — Tally Prime HTTP/XML bridge
+- `tools/zapier.py` — outbound Zapier webhooks + catch hooks
+- `tools/hubspot.py` — HubSpot CRM v3
+- `tools/wordpress.py` — WordPress REST (application password)
+- `tools/shopify.py` — Shopify Admin REST
+
+## Tools / integrations (names)
+- `ToolName.GOOGLE_SHEETS` — Sheets read/write via API
+- `ToolName.MARKET_DATA`, `WEBSITE_BUILDER`, `CONTENT_CREATOR`, `FINANCE`, `CODE_BUILDER`
+- `ToolName.PHONE`, `DATABASE`, `PDF_GENERATOR`, `IMAGE_ANALYZER`, `RESEARCHER`, `SECURITY_SCANNER`, `COMPLIANCE`
+- `ToolName.DEPLOYER`, `VIDEO_GENERATOR`, `NOTION`, `ZOHO_CRM`, `GOOGLE_CALENDAR`, `TALLY`, `AMAZON_SELLER`, `MEESHO`, `WHATSAPP_COMMERCE`, `ZAPIER`, `HUBSPOT`, `WORDPRESS`, `SHOPIFY`, **`LINKEDIN`**, **`INSTAGRAM`**, **`TWITTER`**, **`GEM_PORTAL`**
+- **PostgreSQL:** `DATABASE_URL`, `POSTGRES_STORE_ENABLED`, Docker Compose profile `postgres` (port 5433)
+- **Redis:** `REDIS_URL`, `REDIS_ENABLED`, Docker Compose profile `redis` (port 6380)
+- **White-label:** `WHITE_LABEL_*` settings + runtime `branding.json`
+- **Affiliates:** `DEFAULT_AFFILIATE_COMMISSION`, tables in `memory/store.py`
+- **Env (batch):** `GITHUB_TOKEN`, `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `NOTION_API_KEY`, `ZOHO_*`, `DID_API_KEY`, `VIDEO_GENERATION_ENABLED`, `OTEL_*`, `TALLY_*`
+- Notifications: `send_telegram` for Telegram completions (alongside email/WhatsApp where configured)
+
+## Client / distribution
+- `mobile_app/` — Expo React Native client
+- `chrome_extension/` — Chrome MV3 extension
+- **Deploy:** `install.sh`, `uninstall.sh`, `docker-start.sh`, `vps_setup.sh`; docs `INSTALL.md`, `DEPLOYMENT_GUIDE.md`, `DOCKER.md`, `RAILWAY_DEPLOY.md`, `VPS_DEPLOY.md`; `railway.json`, `.railway.env.example`; **`k8s/`** for Kubernetes (EKS/GKE/AKS)
+- **OSS / GitHub:** `.github/workflows/` (CI + Railway deploy), issue/PR templates; `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+
+## Dashboard tabs (order)
+Logs, Plan, Evaluation, Memory, **Team**, **Marketplace**, **Analytics+**, Tools, Schedule, Monitor, Projects, Briefing, Report, **Templates**, **Analytics** (admin), **Billing**, **Admin** (admin-only; hidden for non-admin). Header **team-switcher** (`#team-switcher`).
+
+## User profile
+- **Industry** is stored in `users.industry` for onboarding and template ordering (medical users see medical templates first in `GET /templates`).

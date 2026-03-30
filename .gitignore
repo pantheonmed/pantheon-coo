@@ -1,0 +1,89 @@
+# Pantheon COO OS — .gitignore
+
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# ── Local pip --target (CI / sandbox); use venv instead ───────────────────────
+.deps/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# ── Testing & coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.coveragerc
+
+# ── Linting & type checking ───────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+
+# ── Database ──────────────────────────────────────────────────────────────────
+pantheon_coo.db
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+/tmp/
+/tmp/pantheon_v2/
+tmp/
+
+# ── Custom tools (generated at runtime, not committed) ────────────────────────
+tools/custom/*.py
+!tools/custom/.gitkeep
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.docker/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Node (if frontend tooling is added) ───────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ── Playwright ────────────────────────────────────────────────────────────────
+playwright/.cache/
+
+# ── Screenshots (workspace output, not source) ────────────────────────────────
+/tmp/pantheon_v2/screenshots/
+
+# ── Process IDs ───────────────────────────────────────────────────────────────
+*.pid

@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Pantheon COO OS",
+    "slug": "pantheon-coo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1117"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pantheon.coo"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f1117"
+      },
+      "package": "com.pantheon.coo"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Pantheon COO to record voice commands."
+        }
+      ]
+    ]
+  }
+}

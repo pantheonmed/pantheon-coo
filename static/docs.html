@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantheon COO OS — Developer docs</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #e8eaef; line-height: 1.55; }
+    main { max-width: 820px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { color: #7c6ff7; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid #2a2f3d; padding-bottom: 6px; }
+    pre, code { background: #1a1d27; border: 1px solid #2a2f3d; border-radius: 8px; padding: 12px; overflow: auto; font-size: 13px; }
+    a { color: #7c6ff7; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { border: 1px solid #2a2f3d; padding: 8px 10px; text-align: left; }
+    th { background: #1a1d27; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Pantheon COO OS — API &amp; integration</h1>
+  <p>Quick reference for developers. OpenAPI: <a href="/docs">/docs</a></p>
+
+  <h2>1. Quick start (curl)</h2>
+  <pre>curl -X POST http://localhost:8002/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "List files in workspace"}'
+
+curl http://localhost:8002/tasks/{task_id}
+
+curl -N http://localhost:8002/tasks/{task_id}/stream
+
+curl http://localhost:8002/health</pre>
+
+  <h2>2. Authentication</h2>
+  <p><strong>JWT:</strong> <code>Authorization: Bearer &lt;token&gt;</code> after <code>POST /auth/login</code>.</p>
+  <p><strong>API key (legacy):</strong> <code>X-COO-API-Key</code> when <code>AUTH_MODE=apikey</code>.</p>
+  <pre>curl -X POST http://localhost:8002/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"********"}'</pre>
+
+  <h2>3. Execute a task (poll in JavaScript)</h2>
+  <pre>async function run(cmd) {
+  const r = await fetch('/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ command: cmd })
+  });
+  const { task_id } = await r.json();
+  while (true) {
+    const t = await (await fetch('/tasks/' + task_id, { headers: { Authorization: 'Bearer ' + token } })).json();
+    if (t.status === 'done' || t.status === 'failed') return t;
+    await new Promise(x => setTimeout(x, 2000));
+  }
+}</pre>
+
+  <h2>4. SSE streaming (EventSource)</h2>
+  <pre>const es = new EventSource('/tasks/' + taskId + '/stream');
+es.onmessage = (ev) => console.log(JSON.parse(ev.data));</pre>
+
+  <h2>5. Webhooks (outbound)</h2>
+  <p>Subscribe with <code>POST /webhooks</code> (authenticated). Verify <code>X-Pantheon-Signature: sha256=&lt;hmac&gt;</code> on the raw body using your secret.</p>
+
+  <h2>6. Rate limits (by plan)</h2>
+  <table>
+    <tr><th>Plan</th><th>Typical execute RPM (indicative)</th></tr>
+    <tr><td>free</td><td>3</td></tr>
+    <tr><td>starter</td><td>10</td></tr>
+    <tr><td>pro</td><td>30</td></tr>
+    <tr><td>enterprise</td><td>100</td></tr>
+  </table>
+  <p>See <code>GET /usage</code> for your current window.</p>
+
+  <h2>7. Error codes</h2>
+  <ul>
+    <li><strong>401</strong> — missing/invalid auth</li>
+    <li><strong>403</strong> — forbidden (e.g. admin routes)</li>
+    <li><strong>429</strong> — rate limited</li>
+    <li><strong>503</strong> — dependency not configured (billing, etc.)</li>
+  </ul>
+
+  <h2>8. Python SDK example</h2>
+  <pre>import requests
+
+class PantheonCOO:
+    def __init__(self, api_key, base_url="https://your-deployment.railway.app"):
+        self.headers = {"X-COO-API-Key": api_key}
+        self.base_url = base_url.rstrip("/")
+
+    def execute(self, command: str) -> dict:
+        r = requests.post(
+            f"{self.base_url}/execute",
+            json={"command": command},
+            headers=self.headers,
+            timeout=60,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def get_task(self, task_id: str) -> dict:
+        r = requests.get(
+            f"{self.base_url}/tasks/{task_id}",
+            headers=self.headers,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def wait_for_completion(self, task_id, timeout=120):
+        import time
+        start = time.time()
+        while time.time() - start &lt; timeout:
+            task = self.get_task(task_id)
+            if task["status"] in ["done", "failed"]:
+                return task
+            time.sleep(2)
+        return None</pre>
+</main>
+</body>
+</html>
