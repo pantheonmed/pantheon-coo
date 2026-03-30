@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pantheon COO OS</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
     :root {
       --bg: #0f1117;
@@ -525,6 +526,81 @@
     return 'badge-queued';
   }
 
+  function openRazorpay(plan) {
+    if (!getToken()) {
+      window.location.href = '/auth/register';
+      return;
+    }
+    apiFetch('/billing/create-order', {
+      method: 'POST',
+      body: { plan: plan }
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          var d = res.data || {};
+          alert(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d));
+          return;
+        }
+        var order = res.data || {};
+        if (order.gateway !== 'razorpay') {
+          alert('Stripe billing is configured for this currency. Please use the Stripe checkout flow.');
+          return;
+        }
+        if (typeof window.Razorpay === 'undefined') {
+          alert('Razorpay checkout.js failed to load. Please check your network and try again.');
+          return;
+        }
+        var profile = loadProfile() || {};
+        var opts = {
+          key: order.razorpay_key_id || order.key_id,
+          amount: order.amount,
+          currency: order.currency || 'INR',
+          name: 'Pantheon COO OS',
+          description: order.plan_name || (plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan'),
+          order_id: order.razorpay_order_id,
+          handler: function (response) {
+            apiFetch('/billing/verify-payment', {
+              method: 'POST',
+              body: {
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              }
+            })
+              .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+              .then(function (res2) {
+                if (!res2.ok) {
+                  var d2 = res2.data || {};
+                  alert(typeof d2.detail === 'string' ? d2.detail : JSON.stringify(d2.detail || d2));
+                  return;
+                }
+                var out = res2.data || {};
+                if (out.success) {
+                  alert('Payment successful! Plan upgraded to ' + (out.plan || plan));
+                  window.location.reload();
+                } else {
+                  alert('Payment verified but upgrade did not complete. Please contact support.');
+                }
+              })
+              .catch(function (e) {
+                alert(e.message || 'Payment verification failed');
+              });
+          },
+          prefill: {
+            name: profile.name || '',
+            email: profile.email || ''
+          },
+          theme: { color: '#7c6ff7' }
+        };
+        var rzp = new window.Razorpay(opts);
+        rzp.open();
+      })
+      .catch(function (e) {
+        alert(e.message || 'Failed to create order');
+      });
+  }
+
   /* ——— Auth screens ——— */
   document.getElementById('link-register').onclick = function () {
     document.getElementById('login-err').style.display = 'none';
@@ -810,23 +886,9 @@
   document.getElementById('modal-upgrade-limit').onclick = function (e) {
     if (e.target.id === 'modal-upgrade-limit') document.getElementById('modal-upgrade-limit').classList.remove('open');
   };
-  document.getElementById('upgrade-now-btn').onclick = async function () {
+  document.getElementById('upgrade-now-btn').onclick = function () {
     document.getElementById('modal-upgrade-limit').classList.remove('open');
-    try {
-      var r = await apiFetch('/billing/create-order', { method: 'POST', body: { plan: 'starter' } });
-      var data = await r.json().catch(function () { return {}; });
-      if (!r.ok) {
-        alert(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data));
-        return;
-      }
-      if (data.gateway === 'razorpay') {
-        alert('Razorpay order created. Complete checkout in-app (key + order id returned by API) or use API docs.');
-      } else if (data.gateway === 'stripe') {
-        alert('Stripe PaymentIntent created. Use client_secret with Stripe.js or your billing flow.');
-      }
-    } catch (e) {
-      alert(e.message || 'Upgrade request failed');
-    }
+    openRazorpay('starter');
   };
 
   async function shareTask(tid) {

@@ -256,7 +256,11 @@ async def create_order(
             "razorpay_order_id": rzp_oid,
             "amount": pricing["amount"],
             "currency": pricing["currency"],
+            # Frontend (dashboard) expects these names for Razorpay checkout.js
             "key_id": settings.razorpay_key_id,
+            "razorpay_key_id": settings.razorpay_key_id,
+            "plan_name": pricing.get("label", plan.title()),
+            "plan": plan,
         }
 
     prices = _tier_prices_for_currency(cur)
