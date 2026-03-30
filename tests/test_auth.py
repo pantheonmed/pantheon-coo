@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import memory.store as store
+from memory.db_pool import get_pool
 from models import ExecutionStep, ToolName, StepStatus
 from security.sandbox import reset_user_workspace, set_user_workspace, validate_step
 from security import user_auth
@@ -208,3 +209,40 @@ class TestAuthJwtModeHttp:
         assert lst.status_code == 200
         admin_ids = {t["task_id"] for t in lst.json()["tasks"]}
         assert reg_tid in admin_ids
+
+
+@pytest.mark.asyncio
+async def test_insert_user_coerces_open_plan_to_free():
+    uid = str(uuid.uuid4())
+    email = f"open{uuid.uuid4().hex[:6]}@example.com"
+    await store.insert_user(
+        uid,
+        email,
+        "Open Legacy",
+        user_auth.hash_password("password123"),
+        plan="open",
+    )
+    u = await store.get_user_by_id(uid)
+    assert u["plan"] == "free"
+
+
+@pytest.mark.asyncio
+async def test_normalize_legacy_user_plans_updates_open():
+    uid = str(uuid.uuid4())
+    email = f"norm{uuid.uuid4().hex[:6]}@example.com"
+    await store.insert_user(
+        uid,
+        email,
+        "Norm",
+        user_auth.hash_password("password123"),
+        plan="pro",
+    )
+    async with get_pool().acquire() as db:
+        await db.execute("UPDATE users SET plan = 'open' WHERE user_id = ?", (uid,))
+        await db.commit()
+    n = await store.normalize_legacy_user_plans()
+    assert n >= 1
+    u = await store.get_user_by_id(uid)
+    assert u["plan"] == "free"
+    n2 = await store.normalize_legacy_user_plans()
+    assert n2 == 0

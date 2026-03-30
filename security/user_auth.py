@@ -98,6 +98,7 @@ async def create_user(
     country_code: Optional[str] = None,
     timezone: Optional[str] = None,
 ) -> dict[str, Any]:
+    """Register a user; new accounts use plan ``free`` (including AUTH_MODE=jwt)."""
     if not settings.allow_registration:
         raise ValueError("Registration is disabled")
     if not validate_email(email):

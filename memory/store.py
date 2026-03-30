@@ -401,6 +401,12 @@ async def init() -> None:
     await _ensure_schedules_timezone_column()
     await _ensure_perf_indexes()
     await _ensure_launch_migrations()
+    try:
+        n = await normalize_legacy_user_plans()
+        if n:
+            print(f"[Memory] Normalized {n} user row(s): plan → free (legacy open/null/empty).")
+    except Exception as e:
+        print(f"[Memory] User plan normalization warning: {e}")
     print(f"[Memory] DB ready → {DB}")
 
 
@@ -601,6 +607,32 @@ async def get_user_by_id(user_id: str) -> Optional[dict]:
             return dict(row) if row else None
 
 
+def _normalize_user_plan(plan: Optional[str]) -> str:
+    """Default tier is ``free``. Maps legacy ``open`` / empty / NULL to ``free``."""
+    p = (plan or "").strip().lower()
+    if not p or p == "open":
+        return "free"
+    return p
+
+
+async def normalize_legacy_user_plans() -> int:
+    """
+    Set ``users.plan`` to ``free`` where it is NULL, empty, or ``open``.
+    Idempotent; safe to run on every startup. Returns number of rows updated.
+    """
+    async with get_pool().acquire() as db:
+        await db.execute(
+            """UPDATE users SET plan = 'free'
+               WHERE plan IS NULL
+                  OR TRIM(COALESCE(plan, '')) = ''
+                  OR LOWER(TRIM(plan)) = 'open'"""
+        )
+        await db.commit()
+        async with db.execute("SELECT changes()") as cur:
+            row = await cur.fetchone()
+            return int(row[0] or 0) if row else 0
+
+
 async def insert_user(
     user_id: str,
     email: str,
@@ -617,6 +649,7 @@ async def insert_user(
     timezone: str = "Asia/Kolkata",
     locale: str = "en-IN",
 ) -> None:
+    plan_use = _normalize_user_plan(plan)
     now = datetime.utcnow().isoformat()
     async with get_pool().acquire() as db:
         await db.execute(
@@ -629,7 +662,7 @@ async def insert_user(
                 name,
                 password_hash,
                 role,
-                plan,
+                plan_use,
                 api_key or None,
                 1,
                 now,
