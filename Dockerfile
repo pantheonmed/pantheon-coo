@@ -26,4 +26,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8002}/health || exit 1
 
 # Start with Railway PORT
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8002}
+CMD uvicorn main_railway:app --host 0.0.0.0 --port ${PORT:-8002}
