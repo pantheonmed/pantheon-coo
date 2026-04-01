@@ -54,25 +54,12 @@ def _legacy_api_key() -> str:
 PUBLIC_PATHS = {
     "/",
     "/health",
-    "/static",
-    "/webhook/whatsapp",
-    "/webhook/telegram",
-    "/webhook/razorpay",
-    "/docs",
-    "/openapi.json",
-    "/redoc",
     "/auth/register",
     "/auth/login",
     "/billing/plans",
-    "/config/branding",
-    "/webhook/zapier",
-    "/onboarding/samples",
-    "/tutorials",
     "/sitemap.xml",
     "/robots.txt",
-    "/docs-page",
-    "/marketplace",
-    "/ready",
+    "/landing",
 }
 
 
@@ -139,13 +126,8 @@ async def require_admin(auth: dict = Depends(require_auth)):
 def _is_public(path: str) -> bool:
     if path in PUBLIC_PATHS:
         return True
-    if path.startswith("/affiliate/link"):
-        return True
-    if path.startswith("/i18n/"):
-        return True
-    if path.startswith("/shared/"):
-        return True
-    return any(path.startswith(p) for p in ("/static/", "/webhook/"))
+    # Static assets must remain public for HTML UIs.
+    return path.startswith("/static/")
 
 
 async def _auth_jwt_mode(

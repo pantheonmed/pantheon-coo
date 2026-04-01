@@ -20,12 +20,24 @@ from config import settings
 ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() != "false"
 WINDOW_SECONDS = 60
 
+STRICT_LIMITS = {
+    "execute": {
+        "free": 3,
+        "starter": 10,
+        "pro": 30,
+        "pro_monthly": 30,
+        "enterprise": 100,
+    },
+    "auth": {"login": 5, "register": 3},
+    "global": {"per_ip": 60},
+}
+
 PLAN_RATE_LIMITS = {
-    "free": {"global_rpm": 20, "execute_rpm": 3},
-    "starter": {"global_rpm": 60, "execute_rpm": 10},
-    "pro": {"global_rpm": 200, "execute_rpm": 30},
-    "pro_monthly": {"global_rpm": 200, "execute_rpm": 30},
-    "enterprise": {"global_rpm": 1000, "execute_rpm": 100},
+    "free": {"global_rpm": int(STRICT_LIMITS["global"]["per_ip"]), "execute_rpm": int(STRICT_LIMITS["execute"]["free"])},
+    "starter": {"global_rpm": int(STRICT_LIMITS["global"]["per_ip"]), "execute_rpm": int(STRICT_LIMITS["execute"]["starter"])},
+    "pro": {"global_rpm": int(STRICT_LIMITS["global"]["per_ip"]), "execute_rpm": int(STRICT_LIMITS["execute"]["pro"])},
+    "pro_monthly": {"global_rpm": int(STRICT_LIMITS["global"]["per_ip"]), "execute_rpm": int(STRICT_LIMITS["execute"]["pro_monthly"])},
+    "enterprise": {"global_rpm": int(STRICT_LIMITS["global"]["per_ip"]), "execute_rpm": int(STRICT_LIMITS["execute"]["enterprise"])},
 }
 
 _windows: dict[str, deque] = defaultdict(deque)
@@ -43,8 +55,14 @@ def _client_ip(request: Request) -> str:
 
 
 def plan_limits_for_auth(auth: dict) -> dict[str, int]:
-    plan = (auth or {}).get("plan") or "free"
-    return PLAN_RATE_LIMITS.get(plan, PLAN_RATE_LIMITS["free"])
+    plan = str((auth or {}).get("plan") or "free").lower()
+    base = PLAN_RATE_LIMITS.get(plan, PLAN_RATE_LIMITS["free"])
+    g = int(base.get("global_rpm", STRICT_LIMITS["global"]["per_ip"]))
+    e = int(base.get("execute_rpm", STRICT_LIMITS["execute"]["free"]))
+    if bool(getattr(settings, "strict_mode", False)):
+        g = max(1, g // 2)
+        e = max(1, e // 2)
+    return {"global_rpm": g, "execute_rpm": e}
 
 
 def _check_memory(key: str, limit: int) -> None:
@@ -90,10 +108,34 @@ async def _apply_check(request: Request, endpoint_type: str, limit: int) -> None
         return
     ip = _client_ip(request)
     key_full = f"rate:{ip}:{endpoint_type}"
-    if _redis_enabled():
-        await _check_redis(key_full, limit)
-    else:
-        _check_memory(f"{endpoint_type}:{ip}", limit)
+    try:
+        if _redis_enabled():
+            await _check_redis(key_full, limit)
+        else:
+            _check_memory(f"{endpoint_type}:{ip}", limit)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            try:
+                import memory.store as store
+
+                hits = await store.record_rate_limit_hit(ip)
+                await store.log_security_event(
+                    "RATE_LIMIT_EXCEEDED",
+                    ip,
+                    f"429 on {endpoint_type} (hits_1h={hits})",
+                    severity="medium",
+                )
+                if hits > 10:
+                    await store.add_blocked_ip(ip, hours=1, reason="Too many 429s")
+                    await store.log_security_event(
+                        "IP_BLOCKED",
+                        ip,
+                        "Blocked IP after repeated rate limit violations",
+                        severity="high",
+                    )
+            except Exception:
+                pass
+        raise
 
 
 def current_usage() -> dict:

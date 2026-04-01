@@ -89,6 +89,8 @@ class Settings(BaseSettings):
     allow_registration: bool = True
     admin_email: str = ""
     admin_telegram_chat_id: str = ""
+    admin_whatsapp_number: str = ""
+    admin_allowed_ips: str = ""
     # Standalone /admin HTML UI (separate from JWT admin role)
     admin_password: str = ""
 
@@ -176,6 +178,9 @@ class Settings(BaseSettings):
     vercel_token: str = ""
     # Self-update target repo (owner/repo)
     self_repo: str = "pantheonmed/pantheon-coo"
+    daily_cost_limit_usd: float = 50.0
+    strict_mode: bool = False
+    execution_paused: bool = False
 
     # Video generation (D-ID / Synthesia optional)
     did_api_key: str = ""

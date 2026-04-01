@@ -262,6 +262,13 @@ async def lifespan(app: FastAPI):
         app.state.scheduler_task = asyncio.create_task(scheduler_loop())
     except Exception as e:
         print(f"Scheduler warning: {e}")
+    try:
+        from security.self_protector import SelfProtector
+
+        app.state.self_protector = SelfProtector()
+        app.state.self_protector_task = asyncio.create_task(app.state.self_protector.monitor_continuously())
+    except Exception as e:
+        print(f"SelfProtector warning: {e}")
     asyncio.create_task(_background_startup_rest())
     print("[Startup] Accepting HTTP; optional services initializing in background…")
     yield
@@ -274,6 +281,12 @@ async def lifespan(app: FastAPI):
                 await t
             except asyncio.CancelledError:
                 pass
+    except Exception:
+        pass
+    try:
+        st = getattr(app.state, "self_protector_task", None)
+        if st is not None:
+            st.cancel()
     except Exception:
         pass
     try:
@@ -308,10 +321,88 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["https://trycooai.com"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def blocked_ip_guard(request: Request, call_next):
+    try:
+        ip = (request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        if not ip:
+            ip = request.client.host if request.client else ""
+        if ip and await store.is_ip_blocked(ip):
+            await store.log_security_event(
+                "IP_BLOCKED_REQUEST",
+                ip,
+                f"Blocked request to {request.url.path}",
+                severity="high",
+            )
+            return Response(content="Access denied", status_code=403)
+    except Exception:
+        pass
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def api_call_counter(request: Request, call_next):
+    try:
+        await store.record_api_call()
+    except Exception:
+        pass
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def admin_protection(request: Request, call_next):
+    if request.url.path.startswith("/admin"):
+        try:
+            allowed = [x.strip() for x in (settings.admin_allowed_ips or "").split(",") if x.strip()]
+            if allowed:
+                ip = (request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+                if not ip:
+                    ip = request.client.host if request.client else ""
+                if ip and ip not in allowed:
+                    await store.log_security_event(
+                        "ADMIN_UNAUTHORIZED_ACCESS",
+                        ip,
+                        f"Blocked admin access from {ip}",
+                        severity="high",
+                    )
+                    return Response(
+                        content=json.dumps({"error": "Access denied"}),
+                        media_type="application/json",
+                        status_code=403,
+                    )
+        except Exception:
+            pass
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # CSP must allow inline dashboard scripts + Razorpay/Stripe embeds
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.stripe.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' https://trycooai.com; "
+        "frame-src https://checkout.razorpay.com https://js.stripe.com; "
+    )
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    try:
+        response.headers.pop("server", None)
+    except Exception:
+        pass
+    return response
 
 
 @app.middleware("http")
@@ -1091,6 +1182,18 @@ async def execute(
         {"user_id": str(_auth.get("user_id") or ""), "goal_type": "unknown"},
     ):
         pass
+    if bool(getattr(settings, "execution_paused", False)):
+        raise HTTPException(503, "Execution paused temporarily")
+    try:
+        from security.sandbox import SecurityError, sanitize_command
+
+        sanitize_command(req.command)
+    except SecurityError as e:
+        ip = (request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        if not ip:
+            ip = request.client.host if request.client else ""
+        await store.log_security_event("INJECTION_BLOCKED", ip, str(e), severity="high", user_id=str(_auth.get("user_id") or ""))
+        raise HTTPException(400, str(e))
     task_id = str(uuid.uuid4())
     ctx = dict(req.context or {})
     ctx["language"] = getattr(request.state, "lang", settings.default_language)
@@ -1491,6 +1594,7 @@ async def list_tasks(
     limit: int = 20,
     status: Optional[str] = None,
     auth: dict = Depends(require_auth),
+    _rate: None = Depends(rate_limit),
 ):
     uid, is_admin = _auth_user_filter(auth)
     rows = await store.list_tasks(limit=limit, status=status, user_id=uid, is_admin=is_admin)
@@ -1750,6 +1854,53 @@ async def affiliate_payout_request(body: dict, auth: dict = Depends(require_auth
 @app.get("/admin/affiliates")
 async def admin_list_affiliates(_auth=Depends(require_admin)):
     return {"affiliates": await store.list_affiliates_admin()}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin security dashboard APIs
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/admin/security-events")
+async def admin_security_events(limit: int = 100, _auth=Depends(require_admin)):
+    lim = max(1, min(int(limit), 200))
+    async with get_pool().acquire() as db:
+        async with db.execute(
+            "SELECT id, event_type, ip_address, user_id, description, severity, created_at FROM security_events ORDER BY created_at DESC LIMIT ?",
+            (lim,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return {"events": [dict(r) for r in rows]}
+
+
+@app.get("/admin/blocked-ips")
+async def admin_blocked_ips(_auth=Depends(require_admin)):
+    return {"blocked": await store.list_blocked_ips(200)}
+
+
+@app.delete("/admin/blocked-ips/{ip}")
+async def admin_unblock_ip(ip: str, _auth=Depends(require_admin)):
+    await store.unblock_ip(ip)
+    await store.log_security_event("IP_UNBLOCKED", "", f"Unblocked {ip}", severity="medium")
+    return {"ok": True, "ip": ip}
+
+
+@app.get("/admin/security-score")
+async def admin_security_score(_auth=Depends(require_admin)):
+    failed = await store.count_security_events("FAILED_LOGIN", minutes=60)
+    inj = await store.count_security_events("INJECTION_BLOCKED", minutes=60)
+    blocked = len(await store.list_blocked_ips(200))
+    score = 100
+    score -= min(40, failed)
+    score -= min(40, inj * 5)
+    score -= min(20, blocked * 2)
+    if getattr(settings, "strict_mode", False):
+        score = max(0, score - 5)
+    if getattr(settings, "execution_paused", False):
+        score = max(0, score - 10)
+    return {
+        "score": max(0, min(100, int(score))),
+        "signals": {"failed_logins_60m": failed, "injection_60m": inj, "blocked_ips": blocked},
+    }
 
 
 @app.get("/memory/semantic")

@@ -10,7 +10,7 @@ from security.auth import PUBLIC_PATHS
 
 
 def test_webhook_telegram_in_public_paths():
-    assert "/webhook/telegram" in PUBLIC_PATHS
+    assert "/webhook/telegram" not in PUBLIC_PATHS
 
 
 @pytest.mark.asyncio

@@ -56,9 +56,61 @@ BLOCKED_URL_HOSTS = {
 
 DANGEROUS_SHELL = ["&&", "||", ";", "|", "`", "$(", ">", ">>", "<"]
 
+MAX_COMMAND_LENGTH = 2000
+
+# Extra input sanitization for user-provided commands (API layer)
+DANGEROUS_PATTERNS = [
+    # Command injection
+    ";",
+    "&&",
+    "||",
+    "`",
+    "$(",
+    "${",
+    # Path traversal
+    "../",
+    "..\\",
+    "/etc/passwd",
+    "/etc/shadow",
+    # SQL injection
+    "DROP TABLE",
+    "DELETE FROM",
+    "INSERT INTO",
+    "UPDATE SET",
+    "UNION SELECT",
+    "--",
+    # Python injection
+    "__import__",
+    "eval(",
+    "exec(",
+    "compile(",
+    "subprocess",
+    "os.system",
+    # Sensitive files
+    ".env",
+    "config.py",
+    "secrets",
+    "password",
+    "api_key",
+    "token",
+]
+
 
 class SecurityError(Exception):
     pass
+
+
+def sanitize_command(command: str) -> str:
+    raw = command or ""
+    if not raw.strip():
+        raise SecurityError("Empty command")
+    if len(raw) > MAX_COMMAND_LENGTH:
+        raise SecurityError("Command too long")
+    lower = raw.lower()
+    for p in DANGEROUS_PATTERNS:
+        if p.lower() in lower:
+            raise SecurityError("Blocked: suspicious pattern detected")
+    return raw
 
 
 _SPREADSHEET_ID_RE = re.compile(r"^[a-zA-Z0-9\-]+$")

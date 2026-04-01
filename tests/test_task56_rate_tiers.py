@@ -17,7 +17,7 @@ def test_plan_rate_limits_all_four_plans():
 
 
 def test_plan_from_auth_dict():
-    assert plan_limits_for_auth({"plan": "pro"})["global_rpm"] == 200
+    assert plan_limits_for_auth({"plan": "pro"})["global_rpm"] == 60
     assert plan_limits_for_auth({"plan": "unknown"}) == PLAN_RATE_LIMITS["free"]
 
 
@@ -36,11 +36,11 @@ def test_starter_plan_execute_limit():
 
 
 def test_enterprise_plan_global_limit():
-    assert plan_limits_for_auth({"plan": "enterprise"})["global_rpm"] == 1000
+    assert plan_limits_for_auth({"plan": "enterprise"})["global_rpm"] == 60
 
 
 def test_free_plan_global_limit():
-    assert plan_limits_for_auth({"plan": "free"})["global_rpm"] == 20
+    assert plan_limits_for_auth({"plan": "free"})["global_rpm"] == 60
 
 
 def test_usage_default_plan_free_when_missing():

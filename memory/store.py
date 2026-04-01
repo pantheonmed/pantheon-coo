@@ -15,6 +15,7 @@ import aiosqlite
 import json
 import secrets
 import sqlite3
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -276,6 +277,30 @@ CREATE TABLE IF NOT EXISTS task_shares (
 );
 CREATE INDEX IF NOT EXISTS idx_task_shares_task ON task_shares(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_shares_expires ON task_shares(expires_at);
+
+-- Security hardening
+CREATE TABLE IF NOT EXISTS security_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type  TEXT NOT NULL,
+    ip_address  TEXT,
+    user_id     TEXT,
+    description TEXT,
+    severity    TEXT DEFAULT 'medium',
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS blocked_ips (
+    ip_address  TEXT PRIMARY KEY,
+    reason      TEXT,
+    blocked_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS token_blacklist (
+    token_hash     TEXT PRIMARY KEY,
+    user_id        TEXT,
+    blacklisted_at TEXT NOT NULL
+);
 """
 
 
@@ -408,6 +433,190 @@ async def init() -> None:
     except Exception as e:
         print(f"[Memory] User plan normalization warning: {e}")
     print(f"[Memory] DB ready → {DB}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security events / IP blocks / JWT blacklist
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def save_security_event(
+    event_type: str,
+    ip_address: str,
+    user_id: str,
+    description: str,
+    severity: str = "medium",
+) -> None:
+    now = datetime.utcnow().isoformat()
+    async with get_pool().acquire() as db:
+        await db.execute(
+            """INSERT INTO security_events (event_type, ip_address, user_id, description, severity, created_at)
+               VALUES (?,?,?,?,?,?)""",
+            (event_type, ip_address or "", user_id or "", description or "", severity or "medium", now),
+        )
+        await db.commit()
+
+
+async def log_security_event(
+    event_type: str,
+    ip: str,
+    description: str,
+    severity: str = "medium",
+    user_id: str = "",
+) -> None:
+    await save_security_event(event_type, ip, user_id or "", description, severity=severity)
+    if (severity or "").lower() == "high":
+        try:
+            from config import settings
+            from whatsapp import send as wa_send
+
+            if (settings.admin_whatsapp_number or "").strip():
+                await wa_send(
+                    settings.admin_whatsapp_number,
+                    "🚨 Security Alert!\n"
+                    f"Type: {event_type}\n"
+                    f"IP: {ip}\n"
+                    f"Details: {description}"[:3800],
+                )
+        except Exception:
+            pass
+
+
+async def add_blocked_ip(ip: str, hours: int = 1, reason: str = "") -> None:
+    blocked_at = datetime.utcnow().isoformat()
+    expires_at = datetime.utcfromtimestamp(time.time() + int(hours) * 3600).isoformat()
+    async with get_pool().acquire() as db:
+        await db.execute(
+            """INSERT OR REPLACE INTO blocked_ips (ip_address, reason, blocked_at, expires_at)
+               VALUES (?,?,?,?)""",
+            (ip, reason or "", blocked_at, expires_at),
+        )
+        await db.commit()
+
+
+async def is_ip_blocked(ip: str) -> bool:
+    if not ip:
+        return False
+    async with get_pool().acquire() as db:
+        async with db.execute("SELECT expires_at FROM blocked_ips WHERE ip_address=?", (ip,)) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return False
+            try:
+                exp = datetime.fromisoformat(str(row[0] or ""))
+            except Exception:
+                return False
+            return exp > datetime.utcnow()
+
+
+async def list_blocked_ips(limit: int = 200) -> list[dict[str, Any]]:
+    lim = max(1, min(int(limit), 500))
+    now = datetime.utcnow().isoformat()
+    async with get_pool().acquire() as db:
+        async with db.execute(
+            "SELECT ip_address, reason, blocked_at, expires_at FROM blocked_ips WHERE expires_at>? ORDER BY blocked_at DESC LIMIT ?",
+            (now, lim),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [{"ip_address": r[0], "reason": r[1], "blocked_at": r[2], "expires_at": r[3]} for r in rows]
+
+
+async def unblock_ip(ip: str) -> None:
+    async with get_pool().acquire() as db:
+        await db.execute("DELETE FROM blocked_ips WHERE ip_address=?", (ip,))
+        await db.commit()
+
+
+async def blacklist_token(token_hash: str, user_id: str = "") -> None:
+    now = datetime.utcnow().isoformat()
+    async with get_pool().acquire() as db:
+        await db.execute(
+            """INSERT OR REPLACE INTO token_blacklist (token_hash, user_id, blacklisted_at)
+               VALUES (?,?,?)""",
+            (token_hash, user_id or "", now),
+        )
+        await db.commit()
+
+
+async def is_token_blacklisted(token_hash: str) -> bool:
+    if not token_hash:
+        return False
+    async with get_pool().acquire() as db:
+        async with db.execute("SELECT token_hash FROM token_blacklist WHERE token_hash=?", (token_hash,)) as cur:
+            return bool(await cur.fetchone())
+
+
+async def count_security_events(event_type: str, minutes: int = 10) -> int:
+    mins = max(1, min(int(minutes), 1440))
+    cutoff = datetime.utcfromtimestamp(time.time() - mins * 60).isoformat()
+    async with get_pool().acquire() as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM security_events WHERE event_type=? AND created_at>=?",
+            (event_type, cutoff),
+        ) as cur:
+            return int((await cur.fetchone())[0] or 0)
+
+
+_api_calls_window: list[float] = []
+
+
+async def record_api_call() -> None:
+    _api_calls_window.append(time.time())
+
+
+async def count_api_calls(minutes: int = 5) -> int:
+    mins = max(1, min(int(minutes), 60))
+    cutoff = time.time() - mins * 60
+    while _api_calls_window and _api_calls_window[0] < cutoff:
+        _api_calls_window.pop(0)
+    return len(_api_calls_window)
+
+
+async def get_suspicious_ips(minutes: int = 10, limit: int = 10) -> list[str]:
+    mins = max(1, min(int(minutes), 1440))
+    cutoff = datetime.utcfromtimestamp(time.time() - mins * 60).isoformat()
+    lim = max(1, min(int(limit), 100))
+    async with get_pool().acquire() as db:
+        async with db.execute(
+            """SELECT ip_address, COUNT(*) c
+               FROM security_events
+               WHERE event_type='FAILED_LOGIN' AND created_at>=? AND ip_address!=''
+               GROUP BY ip_address
+               ORDER BY c DESC
+               LIMIT ?""",
+            (cutoff, lim),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [r[0] for r in rows if r and r[0]]
+
+
+async def get_top_attacker_ip(minutes: int = 60) -> str:
+    mins = max(1, min(int(minutes), 1440))
+    cutoff = datetime.utcfromtimestamp(time.time() - mins * 60).isoformat()
+    async with get_pool().acquire() as db:
+        async with db.execute(
+            """SELECT ip_address, COUNT(*) c
+               FROM security_events
+               WHERE event_type='INJECTION_BLOCKED' AND created_at>=? AND ip_address!=''
+               GROUP BY ip_address
+               ORDER BY c DESC
+               LIMIT 1""",
+            (cutoff,),
+        ) as cur:
+            row = await cur.fetchone()
+            return (row[0] if row and row[0] else "")
+
+
+_rl_429_hits: dict[str, list[float]] = {}
+
+
+async def record_rate_limit_hit(ip: str) -> int:
+    now = time.time()
+    w = _rl_429_hits.setdefault(ip, [])
+    w.append(now)
+    cutoff = now - 3600
+    while w and w[0] < cutoff:
+        w.pop(0)
+    return len(w)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -745,6 +954,12 @@ async def count_tasks_for_user_this_month(user_id: str) -> int:
 async def update_user_plan(user_id: str, plan: str) -> None:
     async with get_pool().acquire() as db:
         await db.execute("UPDATE users SET plan=? WHERE user_id=?", (plan, user_id))
+        await db.commit()
+
+
+async def update_user_role(user_id: str, role: str) -> None:
+    async with get_pool().acquire() as db:
+        await db.execute("UPDATE users SET role=? WHERE user_id=?", (role, user_id))
         await db.commit()
 
 
