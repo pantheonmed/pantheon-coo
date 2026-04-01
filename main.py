@@ -27,6 +27,7 @@ import hmac
 import os
 import time
 import secrets
+import shlex
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any, Optional
@@ -78,6 +79,30 @@ from agents.briefing import generate_briefing, send_briefing
 from project_runner import run_project
 from logging_config import setup_logging
 from billing import router as billing_router
+
+
+class TerminalRunBody(BaseModel):
+    command: str = Field(..., min_length=1, max_length=4000)
+    cwd: Optional[str] = None
+    timeout: Optional[int] = None
+
+
+def _terminal_validate_command(cmd: str) -> None:
+    """
+    Validate a terminal command using the same sandbox rules as plan steps.
+    """
+    from models import ExecutionStep, ToolName
+    from security.sandbox import validate_step
+
+    step = ExecutionStep(
+        step_id=1,
+        tool=ToolName.TERMINAL,
+        action="run_command",
+        params={"command": cmd},
+        depends_on=[],
+        description="terminal.run",
+    )
+    validate_step(step)
 from api_batch import router as api_batch_router
 from templates import (
     TEMPLATES,
@@ -2131,6 +2156,82 @@ async def get_patterns():
         r["description"] = describe_pattern(r["step_sequence"])
         del r["step_sequence"]
     return {"patterns": rows}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Terminal access (dashboard tab)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/terminal/run")
+async def terminal_run(body: TerminalRunBody, auth: dict = Depends(require_auth)) -> dict[str, Any]:
+    if auth.get("mode") == "none":
+        raise HTTPException(401, "Authentication required")
+    cmd = (body.command or "").strip()
+    _terminal_validate_command(cmd)
+    from tools import terminal as term_tool
+    res = await term_tool.execute(
+        "run_command",
+        {
+            "command": cmd,
+            "cwd": body.cwd,
+            "timeout": int(body.timeout or settings.agent_timeout_seconds or 90),
+        },
+    )
+    out = (res.get("stdout") or "").strip()
+    err = (res.get("stderr") or "").strip()
+    combined = "\n".join([x for x in [out, err] if x])
+    return {
+        "ok": bool(res.get("success")),
+        "exit_code": int(res.get("exit_code", -1)),
+        "stdout": out,
+        "stderr": err,
+        "output": combined,
+    }
+
+
+@app.post("/terminal/run/stream")
+async def terminal_run_stream(
+    body: TerminalRunBody,
+    request: Request,
+    auth: dict = Depends(require_auth),
+) -> StreamingResponse:
+    """
+    Streams command output via SSE (best-effort).
+    """
+    if auth.get("mode") == "none":
+        raise HTTPException(401, "Authentication required")
+    cmd = (body.command or "").strip()
+    _terminal_validate_command(cmd)
+    timeout = int(body.timeout or settings.agent_timeout_seconds or 90)
+
+    async def _gen():
+        yield f"event: start\ndata: {json.dumps({'command': cmd})}\n\n"
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=body.cwd,
+            )
+            try:
+                assert proc.stdout is not None
+                while True:
+                    if await request.is_disconnected():
+                        proc.kill()
+                        break
+                    line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
+                    if not line:
+                        break
+                    yield f"event: output\ndata: {json.dumps({'line': line.decode(errors='replace')})}\n\n"
+            except asyncio.TimeoutError:
+                proc.kill()
+                yield f"event: error\ndata: {json.dumps({'error': f'Timed out after {timeout}s'})}\n\n"
+            rc = await proc.wait()
+            yield f"event: done\ndata: {json.dumps({'exit_code': rc})}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper

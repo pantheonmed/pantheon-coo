@@ -22,7 +22,9 @@ from __future__ import annotations
 import json
 import asyncio
 import time
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from config import settings
@@ -65,6 +67,118 @@ def _clip(text: str, n: int = 220) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+async def _maybe_fix_and_run_generated_code(
+    task_id: str,
+    goal_type: str,
+    execution: ExecutionOutput,
+    context: dict,
+    *,
+    max_files: int = 1,
+) -> dict:
+    """
+    For developer flows (goal_type build/code), detect generated .py files from filesystem writes,
+    run them, and auto-fix errors (max 5 attempts) until they work.
+    """
+    gt = (goal_type or "").strip().lower()
+    if gt not in ("code", "build"):
+        return {"did_run": False}
+
+    # Heuristic: look for filesystem.write_file outputs with a .py path.
+    paths: list[str] = []
+    try:
+        for step_id in sorted((execution.raw_outputs or {}).keys()):
+            out = execution.raw_outputs.get(step_id)
+            if isinstance(out, dict) and isinstance(out.get("path"), str):
+                p = out["path"]
+                if p.endswith(".py"):
+                    paths.append(p)
+    except Exception:
+        paths = []
+
+    if not paths:
+        return {"did_run": False}
+
+    from tools import filesystem as fs_tool
+    from agents.auto_fixer import AutoFixer
+
+    ran: list[dict] = []
+    fixer = AutoFixer()
+    for file_path in paths[: max(1, int(max_files))]:
+        try:
+            code = await fs_tool.execute("read_file", {"path": file_path})
+        except Exception as e:
+            ran.append({"file_path": file_path, "success": False, "error": str(e), "attempts": 0})
+            continue
+
+        await store.log(task_id, f"✅ Code generated → running: {file_path}", "info")
+        await store.push_stream_event(
+            task_id,
+            "agent_start",
+            {"agent": "auto_fixer", "file_path": file_path},
+        )
+        res = await fixer.fix_and_run(code=code, file_path=file_path)
+        await store.push_stream_event(
+            task_id,
+            "agent_done",
+            {
+                "agent": "auto_fixer",
+                "file_path": file_path,
+                "success": bool(res.get("success")),
+                "attempts": int(res.get("attempts") or 0),
+            },
+        )
+        if res.get("success"):
+            fixed_n = max(int(res.get("attempts") or 1) - 1, 0)
+            await store.log(
+                task_id,
+                f"✅ Code generated → Running → Fixed {fixed_n} error(s) → Working!",
+                "info",
+                {"file_path": file_path, "attempts": res.get("attempts"), "stdout": _clip(str(res.get('output') or ''), 400)},
+            )
+
+            # Optional: if this was inside a pulled GitHub repo, push a single-file update via API.
+            try:
+                gh_repo = (context or {}).get("github_repo")
+                if gh_repo and (settings.github_token or "").strip():
+                    root = Path("/tmp/pantheon_v2").resolve() / str(gh_repo).split("/")[-1]
+                    fp = Path(str(res.get("file_path") or file_path)).resolve()
+                    if root in fp.parents:
+                        rel = str(fp.relative_to(root))
+                        from agents.github_agent import GitHubAgent
+
+                        await GitHubAgent().write_file(
+                            gh_repo,
+                            rel,
+                            str(res.get("final_code") or ""),
+                            commit_message=f"Auto-fix: {task_id[:8]}",
+                        )
+                        await store.log(task_id, f"Pushed fix to GitHub file {rel}", "info")
+            except Exception as e:
+                await store.log(task_id, f"GitHub push warning: {e}", "warning")
+        else:
+            await store.log(
+                task_id,
+                f"Auto-fix failed after {res.get('attempts')} attempt(s)",
+                "warning",
+                {"file_path": file_path, "error": _clip(str(res.get('last_error') or ''), 400)},
+            )
+        ran.append(res)
+
+    return {"did_run": True, "results": ran}
+
+
+def _extract_github_repo(text: str) -> str | None:
+    """
+    Extract owner/repo from a GitHub URL if present.
+    """
+    if not text:
+        return None
+    m = re.search(r"github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)", text)
+    if not m:
+        return None
+    return f"{m.group(1)}/{m.group(2)}"
+
+
 async def run(
     task_id: str,
     command: str,
@@ -98,6 +212,20 @@ async def run(
     sm = SemanticMemory(settings.db_path)
 
     try:
+        # Optional: pre-pull a GitHub repo if command references one (developer flow).
+        try:
+            repo = _extract_github_repo(command)
+            if repo:
+                context["github_repo"] = repo
+                from agents.github_agent import GitHubAgent
+
+                await store.log(task_id, f"GitHub repo detected: {repo} — pulling…", "info")
+                local = f"/tmp/pantheon_v2/{repo.split('/')[-1]}"
+                await GitHubAgent().pull_repo(repo, local)
+                context["github_local_path"] = local
+        except Exception as e:
+            await store.log(task_id, f"GitHub pull warning: {e}", "warning")
+
         with span("orchestrator.run", {"task_id": task_id, "command": command[:50]}):
             pass
         for iteration in range(1, settings.max_loop_iterations + 1):
@@ -269,6 +397,14 @@ async def run(
                 f"{execution.failed} failed",
                 "info" if execution.failed == 0 else "warning",
             )
+
+            # ── Developer power: run generated code + auto-fix ───────────
+            try:
+                await _maybe_fix_and_run_generated_code(
+                    task_id, reasoning.goal_type, execution, context
+                )
+            except Exception as e:
+                await store.log(task_id, f"AutoFixer warning: {e}", "warning")
 
             # ── 4. EVALUATION ────────────────────────────────────────────
             await store.update_status(task_id, TaskStatus.EVALUATING)

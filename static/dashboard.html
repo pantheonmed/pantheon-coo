@@ -380,6 +380,7 @@
         <button type="button" class="tab" data-tab="eval">Evaluation</button>
         <button type="button" class="tab" data-tab="memory">Memory</button>
         <button type="button" class="tab" data-tab="plan">Plan</button>
+        <button type="button" class="tab" data-tab="terminal">Terminal</button>
         <button type="button" class="tab" data-tab="team" id="team-tab-btn">Team</button>
         <button type="button" class="tab" data-tab="marketplace" id="marketplace-tab-btn">Marketplace</button>
         <button type="button" class="tab" data-tab="insights" id="insights-tab-btn">Analytics+</button>
@@ -1385,6 +1386,83 @@
     }
   }
 
+  function renderTerminalHtml() {
+    var token = getAuthToken();
+    if (!token) {
+      return (
+        '<div style="max-width:760px;">' +
+        '<h3 style="margin:0 0 8px;color:var(--accent);">Terminal</h3>' +
+        '<p class="muted" style="font-size:13px;color:var(--muted);">Sign in to use terminal access.</p>' +
+        '<div id="terminal-err" class="err" style="display:block;margin-top:10px;">Authentication required</div>' +
+        '<button type="button" class="btn-primary" id="terminal-go-login" style="margin-top:12px;">Go to login</button>' +
+        '</div>'
+      );
+    }
+    return (
+      '<div style="max-width:900px;display:flex;flex-direction:column;gap:10px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<h3 style="margin:0;color:var(--accent);">Terminal</h3>' +
+      '<button type="button" class="btn-ghost" id="terminal-clear">Clear</button>' +
+      '</div>' +
+      '<div id="terminal-err" class="err" style="display:none;"></div>' +
+      '<div id="terminal-out" style="border:1px solid var(--border);border-radius:10px;background:var(--bg2);padding:12px;min-height:320px;max-height:420px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;"></div>' +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+      '<input id="terminal-cmd" placeholder="e.g. ls -la" style="flex:1;min-width:220px;padding:10px 12px;" />' +
+      '<button type="button" class="btn-primary" id="terminal-run">Run</button>' +
+      '</div>' +
+      '<p style="font-size:11px;color:var(--muted);margin-top:4px;">Commands are restricted to the server allowlist.</p>' +
+      '</div>'
+    );
+  }
+
+  function wireTerminalTabListeners() {
+    var go = document.getElementById('terminal-go-login');
+    if (go) go.onclick = function () { showScreen('screen-login'); };
+
+    var out = document.getElementById('terminal-out');
+    var err = document.getElementById('terminal-err');
+    var cmd = document.getElementById('terminal-cmd');
+    var run = document.getElementById('terminal-run');
+    var clr = document.getElementById('terminal-clear');
+    if (clr && out) clr.onclick = function () { out.textContent = ''; };
+
+    function append(text) {
+      if (!out) return;
+      out.textContent += (out.textContent ? '\n' : '') + text;
+      out.scrollTop = out.scrollHeight;
+    }
+    function setErr(msg) {
+      if (!err) return;
+      err.textContent = msg || '';
+      err.style.display = msg ? 'block' : 'none';
+    }
+
+    async function runCmd() {
+      setErr('');
+      var c = (cmd && cmd.value ? cmd.value : '').trim();
+      if (!c) return;
+      append('$ ' + c);
+      try {
+        var r = await apiFetch('/terminal/run', { method: 'POST', body: { command: c } });
+        var d = await r.json().catch(function () { return {}; });
+        if (!r.ok) {
+          if (r.status === 401 || r.status === 403) {
+            showBillingAuthRequired('Session expired. Please sign in again.');
+            return;
+          }
+          setErr(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d));
+          return;
+        }
+        append(d.output || '');
+      } catch (e) {
+        setErr(e.message || 'Terminal request failed');
+      }
+    }
+
+    if (run) run.onclick = runCmd;
+    if (cmd) cmd.onkeydown = function (e) { if (e.key === 'Enter') runCmd(); };
+  }
+
   function wirePlanTabListeners() {
     var btn = document.getElementById('btn-upgrade-to-pro');
     if (btn) btn.onclick = function () { openRazorpay('pro_monthly'); };
@@ -1401,6 +1479,11 @@
     if (activeTab === 'plan') {
       panel.innerHTML = await renderSubscriptionPlanPanel();
       wirePlanTabListeners();
+      return;
+    }
+    if (activeTab === 'terminal') {
+      panel.innerHTML = renderTerminalHtml();
+      wireTerminalTabListeners();
       return;
     }
     if (activeTab === 'team') {
@@ -1449,7 +1532,7 @@
       if (activeTab === 'logs') document.getElementById('panel-content').innerHTML = await loadLogsHtml();
       else if (activeTab === 'steps') document.getElementById('panel-content').innerHTML = renderPlanHtml();
       else if (activeTab === 'admin') document.getElementById('panel-content').innerHTML = await loadAdminPanelHtml();
-      else if (activeTab === 'team' || activeTab === 'marketplace' || activeTab === 'insights') await renderPanel();
+      else if (activeTab === 'team' || activeTab === 'marketplace' || activeTab === 'insights' || activeTab === 'terminal') await renderPanel();
     }, 3000);
   }
 
