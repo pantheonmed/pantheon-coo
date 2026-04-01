@@ -2233,6 +2233,48 @@ async def terminal_run_stream(
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Self-update (COO improves itself) — requires confirmation before push
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SelfUpdateBody(BaseModel):
+    instruction: str = Field(..., min_length=3, max_length=8000)
+
+
+class SelfUpdateConfirmBody(BaseModel):
+    token: str = Field(..., min_length=8, max_length=200)
+    decision: str = Field(..., min_length=2, max_length=10)  # "haan" | "nahi"
+
+
+@app.post("/self-update")
+async def self_update(body: SelfUpdateBody, auth: dict = Depends(require_auth)) -> dict[str, Any]:
+    if auth.get("mode") == "none":
+        raise HTTPException(401, "Authentication required")
+    from agents.self_update_agent import SelfUpdateAgent
+
+    repo = getattr(settings, "self_repo", "") or "pantheonmed/pantheon-coo"
+    agent = SelfUpdateAgent()
+    out = await agent.prepare_self_update(repo=repo, instruction=body.instruction)
+    # Always return required shape
+    return {
+        "plan": out.get("plan") or [],
+        "files_affected": out.get("files_affected") or [],
+        "estimated_time": out.get("estimated_time") or "unknown",
+        "confirmation_needed": bool(out.get("confirmation_needed")),
+        **{k: v for k, v in out.items() if k not in ("plan", "files_affected", "estimated_time", "confirmation_needed")},
+    }
+
+
+@app.post("/self-update/confirm")
+async def self_update_confirm(body: SelfUpdateConfirmBody, auth: dict = Depends(require_auth)) -> dict[str, Any]:
+    if auth.get("mode") == "none":
+        raise HTTPException(401, "Authentication required")
+    from agents.self_update_agent import SelfUpdateAgent
+
+    agent = SelfUpdateAgent()
+    return await agent.confirm_and_push(body.token, body.decision)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper
 # ─────────────────────────────────────────────────────────────────────────────

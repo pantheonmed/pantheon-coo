@@ -346,6 +346,27 @@ async def _handle(msg: _Msg) -> None:
         await send(msg.from_number, "Empty message — send text or a voice note.")
         return
 
+    def _is_self_update_command(txt: str) -> bool:
+        t = (txt or "").lower()
+        # Hinglish triggers + self-reference
+        triggers = ("apne mein", "add karo", "improve karo", "fix karo", "self update", "self-update")
+        if not any(x in t for x in triggers):
+            return False
+        # Must be about COO itself
+        self_words = ("pantheon", "coo", "coo os", "dashboard", "backend", "orchestrator", "whatsapp", "admin")
+        return any(w in t for w in self_words)
+
+    def _parse_confirm(txt: str) -> tuple[str, str] | None:
+        t = (txt or "").strip()
+        if not t:
+            return None
+        low = t.lower()
+        if low.startswith("haan "):
+            return ("haan", t.split(" ", 1)[1].strip())
+        if low.startswith("nahi "):
+            return ("nahi", t.split(" ", 1)[1].strip())
+        return None
+
     task_id = str(uuid.uuid4())
 
     preview = command[:60] + ("…" if len(command) > 60 else "")
@@ -355,16 +376,81 @@ async def _handle(msg: _Msg) -> None:
     )
 
     await store.create_task(task_id, command, source="whatsapp")
-    await orchestrator.run(
-        task_id=task_id,
-        command=command,
-        context={
-            "from": msg.from_number,
-            "source": "whatsapp",
-            "whatsapp_voice": msg.is_voice,
-        },
-        dry_run=False,
-    )
+    conf = _parse_confirm(command)
+    if conf:
+        decision, token = conf
+        try:
+            from agents.self_update_agent import SelfUpdateAgent
+
+            res = await SelfUpdateAgent().confirm_and_push(token, decision)
+            if res.get("ok") and res.get("pushed"):
+                await send(
+                    msg.from_number,
+                    "✅ Self-update pushed to main.\n"
+                    f"Backup branch: {res.get('backup_branch')}\n"
+                    f"Commit: {res.get('commit_sha')}\n\n"
+                    "Railway will auto-deploy in ~1-2 minutes.",
+                )
+            elif res.get("ok") and not res.get("pushed"):
+                await send(msg.from_number, "Cancelled. No changes were pushed.")
+            else:
+                await send(msg.from_number, f"Could not confirm/push: {res.get('error')}")
+        except Exception as e:
+            await send(msg.from_number, f"Self-update confirm error: {e!s}"[:900])
+        return
+
+    if _is_self_update_command(command):
+        try:
+            # Self-update runs in-process; requires GITHUB_TOKEN on server.
+            from agents.self_update_agent import SelfUpdateAgent
+
+            await store.log(task_id, "Self-update route detected from WhatsApp.", "info")
+            out = await SelfUpdateAgent().prepare_self_update(
+                repo=_cfg().self_repo,
+                instruction=command,
+            )
+            if out.get("confirmation_needed"):
+                tok = out.get("token", "")
+                await store.update_status(
+                    task_id,
+                    status="done",
+                    summary="Self-update prepared. Reply 'haan' to push, or 'nahi' to cancel.",
+                    iterations=1,
+                )
+                await send(
+                    msg.from_number,
+                    "Self-update prepared.\n\n"
+                    f"Files: {', '.join(out.get('files_affected') or [])}\n\n"
+                    f"Reply:\n- haan {tok}\n- nahi {tok}\n\n"
+                    "I will push to main only after your confirmation.",
+                )
+            else:
+                await store.update_status(
+                    task_id,
+                    status="failed",
+                    summary=str(out.get("error") or "Self-update failed"),
+                    iterations=1,
+                )
+                await send(msg.from_number, f"Self-update failed:\n{out.get('error')}")
+        except Exception as e:
+            await store.update_status(
+                task_id,
+                status="failed",
+                summary=f"Self-update error: {e}",
+                iterations=1,
+            )
+            await send(msg.from_number, f"Self-update error: {e!s}"[:900])
+    else:
+        await orchestrator.run(
+            task_id=task_id,
+            command=command,
+            context={
+                "from": msg.from_number,
+                "source": "whatsapp",
+                "whatsapp_voice": msg.is_voice,
+            },
+            dry_run=False,
+        )
 
     row = await store.get_task(task_id)
     if not row:

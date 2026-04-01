@@ -174,6 +174,8 @@ class Settings(BaseSettings):
     github_username: str = ""
     railway_token: str = ""
     vercel_token: str = ""
+    # Self-update target repo (owner/repo)
+    self_repo: str = "pantheonmed/pantheon-coo"
 
     # Video generation (D-ID / Synthesia optional)
     did_api_key: str = ""
