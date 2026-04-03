@@ -610,20 +610,21 @@ async def admin_html_page(request: Request):
     return HTMLResponse("<p>Missing static/admin_panel.html</p>", status_code=500)
 
 @app.get("/")
-async def home():
+async def root():
     """Marketing landing page (static/landing.html)."""
     return FileResponse("static/landing.html")
 
 
-@app.get("/dashboard")
-async def dashboard():
+@app.get("/app")
+async def app_dashboard():
     """Main COO dashboard UI (static/dashboard.html)."""
     return FileResponse("static/dashboard.html")
 
 
-@app.get("/app")
-async def app_entry():
-    return FileResponse("static/dashboard.html")
+@app.get("/dashboard")
+async def dashboard_redirect():
+    """Legacy URL → canonical app shell at ``/app``."""
+    return RedirectResponse("/app", status_code=307)
 
 
 @app.get("/landing")
@@ -650,7 +651,7 @@ async def docs_page():
 @app.get("/sitemap.xml", summary="Sitemap for crawlers")
 async def sitemap_xml():
     base = "https://pantheon.ai"
-    paths = ["/", "/dashboard", "/docs-page", "/landing", "/auth/login", "/auth/register"]
+    paths = ["/", "/app", "/docs-page", "/landing", "/auth/login", "/auth/register"]
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',

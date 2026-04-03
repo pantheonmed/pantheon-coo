@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
+    smtp_from: str = ""  # if empty, email_from is used for SMTP From:
     resend_api_key: str = ""
 
     # News/search backend: "google_rss" (default) or "duckduckgo".

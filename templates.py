@@ -12,6 +12,52 @@ INDUSTRIES = frozenset({"medical", "retail", "agency", "tech", "other"})
 
 TEMPLATES: list[dict[str, Any]] = [
     {
+        "id": "email_draft_save",
+        "category": "communicate",
+        "title": "Draft Professional Email",
+        "command": "Write a professional email to {recipient} about {subject}. Include proper greeting, body with key points: {key_points}, and professional closing. Sign as {sender_name}. Save the email to workspace.",
+        "variables": ["recipient", "subject", "key_points", "sender_name"],
+        "guaranteed": True,
+    },
+    {
+        "id": "research_report_save",
+        "category": "analyze",
+        "title": "Research & Save Report",
+        "command": "Research {topic} and create a comprehensive report with overview, key players, recent developments, and recommendations. Save as markdown file in workspace.",
+        "variables": ["topic"],
+        "guaranteed": True,
+    },
+    {
+        "id": "gst_invoice_create",
+        "category": "finance",
+        "title": "Create GST Invoice",
+        "command": "Create a GST invoice for client {client_name} at {client_address} for {product_service} worth Rs {amount} at {gst_rate}% GST. Invoice number {invoice_no}. Save as HTML file.",
+        "variables": [
+            "client_name",
+            "client_address",
+            "product_service",
+            "amount",
+            "gst_rate",
+            "invoice_no",
+        ],
+        "guaranteed": True,
+    },
+    {
+        "id": "system_health_report",
+        "category": "devops",
+        "title": "System Health Report",
+        "command": "Check disk space and memory usage on the server. Format results clearly showing used/free space and memory. Save health report to workspace.",
+        "guaranteed": True,
+    },
+    {
+        "id": "content_pack_save",
+        "category": "communicate",
+        "title": "Social Media Content Pack",
+        "command": "Create 5 Instagram captions with hashtags for {brand_name} selling {product}. Target audience: {audience}. Include call to action. Save all captions to workspace file.",
+        "variables": ["brand_name", "product", "audience"],
+        "guaranteed": True,
+    },
+    {
         "id": "daily_report",
         "category": "reporting",
         "title": "Daily Performance Report",

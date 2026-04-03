@@ -389,7 +389,7 @@ footer a { color:#888; text-decoration:none; margin:0 16px; }
     <a href="#pricing">Pricing</a>
     <a href="#faq">FAQ</a>
     <a href="/docs-page" target="_blank">Docs</a>
-    <a href="/dashboard" class="nav-cta">Start Free →</a>
+    <a href="/app" class="nav-cta">Start Free →</a>
   </div>
 </nav>
 
@@ -402,7 +402,7 @@ footer a { color:#888; text-decoration:none; margin:0 16px; }
   <p>Tell COO what to do in plain English or Hindi.<br>
   It plans, executes, verifies quality — automatically.</p>
   <div class="hero-buttons">
-    <a href="/dashboard" class="btn-primary">Start Free — No Credit Card</a>
+    <a href="/app" class="btn-primary">Start Free — No Credit Card</a>
     <a href="#demo" class="btn-secondary">See Live Demo ↓</a>
   </div>
 </div>
@@ -520,7 +520,7 @@ footer a { color:#888; text-decoration:none; margin:0 16px; }
         <li>Email support</li>
       </ul>
       <button class="btn-plan-outline" 
-        onclick="window.location.href='/dashboard'">
+        onclick="window.location.href='/app'">
         Start Free
       </button>
     </div>
@@ -637,7 +637,7 @@ footer a { color:#888; text-decoration:none; margin:0 16px; }
 <div class="cta">
   <h2>Start Automating Your Business Today</h2>
   <p>20 free tasks every month. No credit card required.</p>
-  <a href="/dashboard" class="btn-primary" 
+  <a href="/app" class="btn-primary" 
     style="display:inline-block">
     Get Started Free →
   </a>
@@ -663,7 +663,7 @@ footer a { color:#888; text-decoration:none; margin:0 16px; }
 function startUpgrade(plan) {
   const token = localStorage.getItem('coo_token');
   if (!token) {
-    window.location.href = '/dashboard?upgrade=' + encodeURIComponent(plan);
+    window.location.href = '/app?upgrade=' + encodeURIComponent(plan);
     return;
   }
   
@@ -678,7 +678,7 @@ function startUpgrade(plan) {
   .then(function(r) { return r.json(); })
   .then(function(order) {
     if (!order.razorpay_order_id) {
-      window.location.href = '/dashboard?upgrade=' + encodeURIComponent(plan);
+      window.location.href = '/app?upgrade=' + encodeURIComponent(plan);
       return;
     }
     
@@ -707,7 +707,7 @@ function startUpgrade(plan) {
         .then(function(result) {
           if (result.success) {
             alert('🎉 Payment successful! Welcome to ' + plan);
-            window.location.href = '/dashboard';
+            window.location.href = '/app';
           }
         });
       },
@@ -718,7 +718,7 @@ function startUpgrade(plan) {
     rzp.open();
   })
   .catch(function() {
-    window.location.href = '/dashboard?upgrade=' + encodeURIComponent(plan);
+    window.location.href = '/app?upgrade=' + encodeURIComponent(plan);
   });
 }
 </script>

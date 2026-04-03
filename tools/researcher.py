@@ -295,19 +295,52 @@ async def _research_topic(p: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("topic is required.")
     depth = str(p.get("depth") or "standard").lower()
     save = bool(p.get("save_to_file", True))
-    lim = 8 if depth == "quick" else 12
+    lim = 10 if depth == "quick" else 10
     raw = await smart_search(topic, lim)
+    if not raw:
+        raw = [
+            {
+                "title": "Model knowledge base",
+                "summary": f"General knowledge context for {topic} (no live web hits).",
+                "url": "",
+                "source": "fallback",
+                "date": "",
+            }
+        ]
     bullets = [_normalize_search_hit(it) for it in raw]
-    lines = "\n".join(f"- {b.get('title')}: {b.get('url')}" for b in bullets[:10])
-    resp = call_model(
-        system="You are a research synthesizer for executives. Be concise and factual.",
-        user=f"Topic: {topic}\nDepth: {depth}\nSources (titles + URLs):\n{lines}\n\n"
-        "Provide: (1) 3–6 sentence summary (2) 5–10 key facts as bullets (3) list of source titles used.\n"
-        "Format as markdown with headings ## Summary, ## Key facts, ## Sources.",
-        use_fast=depth == "quick",
+    sources_text = "\n".join(
+        f"- {b.get('title', '')}: {(b.get('summary') or '')[:300]}"
+        for b in bullets[:15]
     )
-    summary = resp.text[:2000]
-    key_facts = [ln.strip("- •\t ") for ln in resp.text.splitlines() if ln.strip().startswith(("-", "•", "*"))]
+    report_prompt = f"""Create a comprehensive research report about: {topic}
+
+Based on these sources (titles + excerpts):
+{sources_text}
+
+Report must include:
+1. Executive Summary (3–4 sentences)
+2. Market Overview
+3. Key Players / Developments
+4. Recent News & Trends
+5. Opportunities & Risks
+6. Recommendations
+7. Sources List (reference titles; cite URLs where present)
+
+Make it professional and detailed (500+ words). Use markdown formatting with clear ## headings."""
+    resp = call_model(
+        system="You are a senior research analyst. Use the sources; if a source lacks a URL, still reflect its theme. Be factual; note uncertainty where needed.",
+        user=report_prompt,
+        use_fast=depth == "quick",
+        max_tokens=4096,
+    )
+    report = resp.text
+    word_count = len(report.split())
+    summary = report[:2000]
+    key_facts = [
+        ln.strip("- •\t ")
+        for ln in report.splitlines()
+        if ln.strip().startswith(("-", "•", "*"))
+    ]
     sources_used = [b.get("url", "") for b in bullets if b.get("url")]
     file_path = ""
     if save:
@@ -315,12 +348,25 @@ async def _research_topic(p: dict[str, Any]) -> dict[str, Any]:
         out_dir.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^a-z0-9_]+", "_", topic.lower())[:50]
         fp = out_dir / f"research_{safe}.md"
-        fp.write_text(f"# Research: {topic}\n\n{resp.text}", encoding="utf-8")
+        lines_src = "\n".join(
+            f"- [{b.get('title', '')}]({b.get('url')})" if b.get("url") else f"- {b.get('title', '')}"
+            for b in bullets
+        )
+        fp.write_text(
+            f"# Research Report: {topic}\n\n"
+            f"Generated: {datetime.now(timezone.utc).isoformat()}\n\n"
+            f"{report}\n\n## Sources\n{lines_src}\n",
+            encoding="utf-8",
+        )
         file_path = str(fp)
     return {
+        "report": report,
         "summary": summary,
         "key_facts": key_facts[:15] if key_facts else [summary[:200]],
         "sources_used": sources_used,
+        "sources_found": len(bullets),
+        "word_count": word_count,
+        "success": word_count > 200,
         "file_path": file_path,
     }
 

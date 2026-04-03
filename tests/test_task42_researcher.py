@@ -62,7 +62,12 @@ async def test_research_topic_creates_file(tmp_path, monkeypatch):
             }
         ]
 
-    with patch.object(rs_mod, "tavily_search", side_effect=fake_tavily):
+    fake_model = MagicMock()
+    fake_model.text = "## Executive Summary\n\n" + ("Lorem ipsum dolor sit amet. " * 80)
+
+    with patch.object(rs_mod, "smart_search", side_effect=fake_tavily), patch.object(
+        rs_mod, "call_model", return_value=fake_model
+    ):
         r = await rs_mod.execute(
             "research_topic",
             {"topic": "widgets", "depth": "quick", "save_to_file": True},

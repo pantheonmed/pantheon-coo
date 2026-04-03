@@ -4,6 +4,8 @@ tools/finance.py — GST, invoices, P&L, cashflow, expense categories (pure Pyth
 from __future__ import annotations
 
 import re
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -48,38 +50,149 @@ def _calculate_gst(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def _generate_invoice(p: dict[str, Any]) -> dict[str, Any]:
+    p = dict(p or {})
+    if p.get("client_name") and not p.get("buyer_name"):
+        p["buyer_name"] = str(p["client_name"])
+    if p.get("client_address") and not p.get("buyer_address"):
+        p["buyer_address"] = str(p["client_address"])
+    if p.get("invoice_no") and not p.get("invoice_number"):
+        p["invoice_number"] = str(p["invoice_no"])
+    items = list(p.get("items") or [])
+    if not items and (p.get("amount") is not None or p.get("product_service")):
+        amt = float(p.get("amount") or 0)
+        gst_r = int(float(p.get("gst_rate") or 18))
+        desc = str(p.get("product_service") or "Services")
+        items = [{"description": desc, "qty": 1, "rate": amt, "gst_rate": gst_r}]
+
+    if not items:
+        raise ValueError("generate_invoice requires items or amount/product_service for a line item.")
+
+    company_name = str(p.get("company_name") or p.get("seller_name") or "Pantheon Meditech Pvt Ltd")
+    company_gstin = str(p.get("company_gstin") or p.get("seller_gstin") or "")
+    seller_address = str(p.get("seller_address") or "Salem, Tamil Nadu - 636001")
+
     inv_dir = _ws_root() / "invoices"
     inv_dir.mkdir(parents=True, exist_ok=True)
-    num = str(p.get("invoice_number") or "INV1")
-    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", num)[:60]
-    path = inv_dir / f"invoice_{safe}.html"
-    items = p.get("items") or []
-    rows = ""
+    num = str(p.get("invoice_number") or f"INV-{int(time.time())}")
+    invoice_date = str(p.get("invoice_date") or datetime.now().strftime("%d %B %Y"))
+    due_date = str(p.get("due_date") or "")
+
     subtotal = 0.0
-    tax_total = 0.0
-    for it in items:
+    gst_rate = int(_validate_gst_rate(items[0].get("gst_rate", 18)))
+    items_html = ""
+    for i, it in enumerate(items, 1):
         desc = str(it.get("description", ""))
         qty = float(it.get("qty", 1))
         rate = float(it.get("rate", 0))
-        gst_r = _validate_gst_rate(it.get("gst_rate", 18))
+        gst_r = int(_validate_gst_rate(it.get("gst_rate", gst_rate)))
         line = qty * rate
-        tax = line * gst_r / 100.0
         subtotal += line
-        tax_total += tax
-        rows += f"<tr><td>{desc}</td><td>{qty}</td><td>{rate}</td><td>{gst_r}%</td><td>{line+tax:.2f}</td></tr>"
-    grand = subtotal + tax_total
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice {num}</title></head>
-<body><h1>Tax Invoice</h1>
-<p><b>Seller:</b> {p.get("seller_name","")} — GSTIN {p.get("seller_gstin","")}<br>{p.get("seller_address","")}</p>
-<p><b>Buyer:</b> {p.get("buyer_name","")} — GSTIN {p.get("buyer_gstin","")}<br>{p.get("buyer_address","")}</p>
-<p>Invoice #{num} Date {p.get("invoice_date","")} Due {p.get("due_date","")}</p>
-<table border="1"><tr><th>Item</th><th>Qty</th><th>Rate</th><th>GST%</th><th>Total</th></tr>{rows}</table>
-<p>Subtotal: {subtotal:.2f} Tax: {tax_total:.2f} <b>Grand: {grand:.2f}</b></p></body></html>"""
-    path.write_text(html, encoding="utf-8")
+        items_html += f"""
+        <tr>
+            <td>{i}</td>
+            <td>{desc}</td>
+            <td>{qty}</td>
+            <td>₹{rate:,.2f}</td>
+            <td>₹{line:,.2f}</td>
+        </tr>"""
+
+    cgst = subtotal * (gst_rate / 2) / 100.0
+    sgst = subtotal * (gst_rate / 2) / 100.0
+    tax_total = cgst + sgst
+    total = subtotal + tax_total
+
+    buyer_name = str(p.get("buyer_name") or "")
+    buyer_addr = str(p.get("buyer_address") or "")
+    buyer_gstin = str(p.get("buyer_gstin") or "")
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{ font-family: Arial, sans-serif; margin: 40px; color: #333; }}
+  .header {{ display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; }}
+  .company {{ font-size: 24px; font-weight: bold; color: #7c6ff7; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+  th {{ background: #7c6ff7; color: white; padding: 10px; }}
+  td {{ padding: 8px; border: 1px solid #ddd; }}
+  .total {{ font-size: 20px; font-weight: bold; color: #7c6ff7; }}
+  .gst-box {{ background: #f9f9f9; padding: 16px; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="company">{company_name}</div>
+    <div>GSTIN: {company_gstin}</div>
+    <div>{seller_address}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:20px"><strong>TAX INVOICE</strong></div>
+    <div>Invoice #: {num}</div>
+    <div>Date: {invoice_date}</div>
+    {f'<div>Due: {due_date}</div>' if due_date else ''}
+  </div>
+</div>
+
+<hr>
+
+<div style="margin: 20px 0">
+  <strong>Bill To:</strong><br>
+  {buyer_name}
+  {f'<br>GSTIN: {buyer_gstin}' if buyer_gstin else ''}<br>
+  {buyer_addr.replace(chr(10), '<br>')}
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Description</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {items_html}
+  </tbody>
+</table>
+
+<div class="gst-box" style="text-align:right">
+  <div>Subtotal: ₹{subtotal:,.2f}</div>
+  <div>CGST ({gst_rate/2}%): ₹{cgst:,.2f}</div>
+  <div>SGST ({gst_rate/2}%): ₹{sgst:,.2f}</div>
+  <div class="total">Total: ₹{total:,.2f}</div>
+</div>
+
+<div style="margin-top:40px;color:#888;font-size:12px">
+  This is a computer generated invoice.
+  Powered by Pantheon COO OS — trycooai.com
+</div>
+</body>
+</html>"""
+
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", num)[:60]
+    html_file = inv_dir / f"{safe}.html"
+    txt_file = inv_dir / f"{safe}.txt"
+    html_file.write_text(html, encoding="utf-8")
+    txt_file.write_text(
+        f"Invoice: {num}\nClient: {buyer_name}\nTotal: ₹{total:,.2f}\nCGST: ₹{cgst:,.2f}\nSGST: ₹{sgst:,.2f}\n",
+        encoding="utf-8",
+    )
     return {
-        "file_path": str(path),
-        "total_amount": round(grand, 2),
+        "invoice_number": num,
+        "html_file": str(html_file),
+        "txt_file": str(txt_file),
+        "file_path": str(html_file),
+        "subtotal": round(subtotal, 2),
+        "cgst": round(cgst, 2),
+        "sgst": round(sgst, 2),
+        "total": round(total, 2),
+        "total_amount": round(total, 2),
         "tax_amount": round(tax_total, 2),
+        "success": True,
     }
 
 

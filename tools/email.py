@@ -12,17 +12,26 @@ Configure in .env:
   SMTP_PORT=587
   SMTP_USER=you@gmail.com
   SMTP_PASSWORD=your-app-password
+  SMTP_FROM=verified-sender@yourdomain.com
   RESEND_API_KEY=re_...
+
+Production send order (async :func:`send_email`):
+  1. Gmail-compatible SMTP when ``smtp_user`` and ``smtp_password`` are set
+  2. Resend API when ``resend_api_key`` is set
+  3. Save message to file under workspace
 
 Supported actions:
   send        → send a plain or HTML email
   send_report → send a formatted COO execution report
 """
+import asyncio
 import smtplib
-import json
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from pathlib import Path
 from typing import Any, Optional
+
 import httpx
 
 
@@ -38,31 +47,102 @@ async def execute(action: str, params: dict[str, Any]) -> Any:
     return await fn(params)
 
 
-async def send_email_real(to: str, subject: str, body: str) -> dict:
+async def send_email(
+    to: str,
+    subject: str,
+    body: str,
+    from_name: str = "Pantheon COO",
+) -> dict[str, Any]:
     """
-    Real SMTP email sender (Gmail/Outlook/any SMTP with STARTTLS).
-    Used for verification and evaluation.
+    Try SMTP (Gmail-compatible STARTTLS) → Resend → save to disk.
     """
     from config import settings
 
-    msg = MIMEText(body, "plain")
-    msg["Subject"] = subject
-    msg["From"] = getattr(settings, "smtp_from", "") or getattr(settings, "email_from", "coo@pantheon.ai")
-    msg["To"] = to
+    smtp_from = (
+        (getattr(settings, "smtp_from", None) or "").strip()
+        or (getattr(settings, "email_from", None) or "coo@pantheon.ai").strip()
+    )
 
-    host = getattr(settings, "smtp_host", "smtp.gmail.com")
-    port = int(getattr(settings, "smtp_port", 587) or 587)
-    user = getattr(settings, "smtp_user", "")
-    password = getattr(settings, "smtp_password", "")
+    user = (getattr(settings, "smtp_user", None) or "").strip()
+    password = (getattr(settings, "smtp_password", None) or "").strip()
 
-    with smtplib.SMTP(host, port) as server:
-        server.ehlo()
-        server.starttls()
-        if user and password:
-            server.login(user, password)
-        server.send_message(msg)
+    if user and password:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{from_name} <{smtp_from}>"
+            msg["To"] = to
+            msg.attach(MIMEText(body, "plain"))
+            html_body = body.replace("\n", "<br>")
+            msg.attach(MIMEText(f"<html><body>{html_body}</body></html>", "html"))
 
-    return {"sent": True, "to": to, "subject": subject, "backend": "smtp"}
+            host = getattr(settings, "smtp_host", "smtp.gmail.com")
+            port = int(getattr(settings, "smtp_port", 587) or 587)
+
+            def _send_sync() -> None:
+                with smtplib.SMTP(host, port) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.login(user, password)
+                    server.send_message(msg)
+
+            await asyncio.get_event_loop().run_in_executor(None, _send_sync)
+            return {
+                "sent": True,
+                "method": "smtp",
+                "backend": "smtp",
+                "to": to,
+                "subject": subject,
+            }
+        except Exception as e:
+            print(f"SMTP failed: {e}")
+
+    api_key = (getattr(settings, "resend_api_key", None) or "").strip()
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "from": f"{from_name} <{smtp_from}>",
+                        "to": [to],
+                        "subject": subject,
+                        "text": body,
+                        "html": f"<html><body>{body.replace(chr(10), '<br>')}</body></html>",
+                    },
+                )
+            if 200 <= r.status_code < 300:
+                return {
+                    "sent": True,
+                    "method": "resend",
+                    "backend": "resend",
+                    "to": to,
+                    "subject": subject,
+                    "id": r.json().get("id"),
+                }
+        except Exception as e:
+            print(f"Resend failed: {e}")
+
+    base = Path(getattr(settings, "workspace_dir", "/tmp/pantheon_v2") or "/tmp/pantheon_v2") / "emails"
+    base.mkdir(parents=True, exist_ok=True)
+    filename = base / f"email_{int(time.time())}.txt"
+    content = f"TO: {to}\nSUBJECT: {subject}\n\n{body}"
+    filename.write_text(content, encoding="utf-8")
+    return {
+        "sent": False,
+        "method": "file_saved",
+        "backend": "file_saved",
+        "file": str(filename),
+        "note": "Email saved (no SMTP / Resend delivery)",
+        "to": to,
+        "subject": subject,
+    }
+
+
+async def send_email_real(to: str, subject: str, body: str) -> dict:
+    """Alias for production pipeline (:func:`send_email`)."""
+    return await send_email(to, subject, body, from_name="Pantheon COO")
 
 
 async def _send(p: dict) -> dict:
