@@ -77,12 +77,70 @@ def _parse_rss(xml_text: str, limit: int) -> list[dict[str, Any]]:
     return items
 
 
+async def real_web_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+    """
+    Real web search via DuckDuckGo free endpoint.
+    Returns: [{title, url, summary}, ...]
+    """
+    import httpx
+
+    url = "https://api.duckduckgo.com/"
+    params = {
+        "q": query,
+        "format": "json",
+        "no_html": 1,
+    }
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        r = await client.get(url, params=params)
+        r.raise_for_status()
+        data = r.json()
+
+    results: list[dict[str, Any]] = []
+    related = data.get("RelatedTopics", []) or []
+    for item in related[:limit]:
+        # Some entries are nested; handle typical "Text" layout only.
+        txt = item.get("Text") if isinstance(item, dict) else None
+        if txt:
+            results.append(
+                {
+                    "title": txt[:100],
+                    "url": item.get("FirstURL", "") if isinstance(item, dict) else "",
+                    "summary": txt,
+                    "source": "DuckDuckGo",
+                    "date": "",
+                    "sentiment": _simple_sentiment(txt),
+                }
+            )
+    return results
+
+
 async def _search_news(p: dict[str, Any]) -> list[dict[str, Any]]:
     query = str(p.get("query") or "").strip()
     if not query:
         raise ValueError("query is required.")
     limit = min(int(p.get("limit") or 10), 50)
     language = str(p.get("language") or "en")
+    backend = str(getattr(settings, "news_search_backend", "google_rss") or "google_rss").lower()
+
+    if backend == "duckduckgo":
+        try:
+            items = await real_web_search(query, limit=limit)
+            # normalize to expected schema
+            return [
+                {
+                    "title": it.get("title", ""),
+                    "summary": it.get("summary", "")[:500],
+                    "url": it.get("url", ""),
+                    "source": it.get("source", "DuckDuckGo"),
+                    "date": it.get("date", ""),
+                    "sentiment": it.get("sentiment", _simple_sentiment(it.get("title", ""))),
+                }
+                for it in items
+            ]
+        except Exception:
+            # Fallback to RSS parsing below
+            pass
+
     url = _rss_url(query, language)
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         r = await client.get(url)

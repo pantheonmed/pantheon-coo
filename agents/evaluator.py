@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from agents.base import BaseAgent
@@ -108,6 +109,29 @@ def run_ground_checks(plan: PlanningOutput, execution: ExecutionOutput) -> tuple
             detail = (
                 f"File present at {path_str}" if ok else f"File missing at {path_str or '(no path)'}"
             )
+
+            # If this looks like a report/invoice/email content file, also verify it has words.
+            word_ok = True
+            word_detail = ""
+            try:
+                if ok and p:
+                    name = p.name.lower()
+                    ext = p.suffix.lower()
+                    looks_content_rich = any(k in name for k in ("report", "invoice", "email", "captions", "summary"))
+                    if looks_content_rich and ext in (".md", ".html", ".txt"):
+                        txt = p.read_text(encoding="utf-8", errors="ignore")
+                        words = re.findall(r"\w+", txt)
+                        word_ok = len(words) >= 3
+                        word_detail = f"word_count={len(words)}"
+            except Exception:
+                word_ok = False
+
+            if not word_ok:
+                ok = False
+                if word_detail:
+                    detail = f"{detail} but {word_detail}"
+                else:
+                    detail = f"{detail} but content verification failed"
             checks.append({
                 "check_type": "filesystem_write",
                 "step_id": step.step_id,
@@ -143,6 +167,34 @@ def run_ground_checks(plan: PlanningOutput, execution: ExecutionOutput) -> tuple
             )
             checks.append({
                 "check_type": "http_status",
+                "step_id": step.step_id,
+                "passed": ok,
+                "detail": detail,
+            })
+            if not ok:
+                any_failed = True
+
+        elif tool == ToolName.EMAIL:
+            # Email tool returns a dict like {"sent": True, ...}
+            rd = _result_as_dict(raw)
+            sent = bool(rd.get("sent")) if rd else False
+            detail = f"email sent={sent}"
+            checks.append({
+                "check_type": "email_sent",
+                "step_id": step.step_id,
+                "passed": sent,
+                "detail": detail,
+            })
+            if not sent:
+                any_failed = True
+
+        elif tool == ToolName.RESEARCHER and step.action in ("search_news", "get_industry_news"):
+            # search_news returns list[dict]
+            items = raw if isinstance(raw, list) else []
+            ok = len(items) >= 1
+            detail = f"search returned {len(items)} item(s)"
+            checks.append({
+                "check_type": "news_search_results",
                 "step_id": step.step_id,
                 "passed": ok,
                 "detail": detail,

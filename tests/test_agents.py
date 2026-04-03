@@ -48,6 +48,27 @@ class TestModels:
         assert r.complexity == "low"
         assert r.clarifications_needed == []
 
+    @pytest.mark.asyncio
+    async def test_reasoning_fallback_when_model_returns_invalid_json(self):
+        from unittest.mock import patch
+
+        from agents.model_router import ModelResponse
+        from agents.reasoning import ReasoningAgent
+        from models import ReasoningInput
+
+        bad = ModelResponse(
+            text="<<<not-valid-json>>>",
+            model_used="test-model",
+            provider="anthropic",
+            fallback_used=False,
+        )
+        with patch("agents.reasoning.call_model", return_value=bad):
+            out = await ReasoningAgent().run(ReasoningInput(raw_goal="Ship feature X"))
+        assert out.understood_goal == "Ship feature X"
+        assert out.goal_type == "build"
+        assert out.complexity == "medium"
+        assert any("parse" in r.lower() or "attempts" in r.lower() for r in out.risks)
+
     def test_evaluator_output_goal_met_logic(self):
         from models import EvaluatorOutput
         e = EvaluatorOutput(score=0.9, goal_met=True)

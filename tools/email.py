@@ -30,11 +30,39 @@ async def execute(action: str, params: dict[str, Any]) -> Any:
     dispatch = {
         "send":        _send,
         "send_report": _send_report,
+        "send_email_real": send_email_real,
     }
     fn = dispatch.get(action)
     if fn is None:
         raise ValueError(f"Unknown email action: '{action}'. Available: {list(dispatch)}")
     return await fn(params)
+
+
+async def send_email_real(to: str, subject: str, body: str) -> dict:
+    """
+    Real SMTP email sender (Gmail/Outlook/any SMTP with STARTTLS).
+    Used for verification and evaluation.
+    """
+    from config import settings
+
+    msg = MIMEText(body, "plain")
+    msg["Subject"] = subject
+    msg["From"] = getattr(settings, "smtp_from", "") or getattr(settings, "email_from", "coo@pantheon.ai")
+    msg["To"] = to
+
+    host = getattr(settings, "smtp_host", "smtp.gmail.com")
+    port = int(getattr(settings, "smtp_port", 587) or 587)
+    user = getattr(settings, "smtp_user", "")
+    password = getattr(settings, "smtp_password", "")
+
+    with smtplib.SMTP(host, port) as server:
+        server.ehlo()
+        server.starttls()
+        if user and password:
+            server.login(user, password)
+        server.send_message(msg)
+
+    return {"sent": True, "to": to, "subject": subject, "backend": "smtp"}
 
 
 async def _send(p: dict) -> dict:

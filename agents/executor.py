@@ -83,6 +83,7 @@ class ExecutionAgent:
     async def _run_with_retry(self, task_id: str, step: ExecutionStep) -> StepResult:
         last_error: str | None = None
         tool_s = step.tool.value if hasattr(step.tool, "value") else str(step.tool)
+        step_timeout = int(getattr(settings, "step_timeout_seconds", 30) or 30)
 
         for attempt in range(settings.max_loop_iterations):  # reuse max_retries concept
             if attempt > 0:
@@ -99,6 +100,7 @@ class ExecutionAgent:
                     "action": step.action,
                     "description": (step.description or "")[:200],
                     "attempt": attempt + 1,
+                    "status": StepStatus.RUNNING.value,
                 },
             )
 
@@ -107,7 +109,11 @@ class ExecutionAgent:
                 await store.log(task_id, f"Step {step.step_id} → [{step.tool}] {step.action}", "info",
                                 {"params": step.params})
 
-                result = await run_tool(step.tool, step.action, step.params)
+                # Hard timeout to ensure tasks never stay "pending" forever.
+                result = await asyncio.wait_for(
+                    run_tool(step.tool, step.action, step.params),
+                    timeout=step_timeout,
+                )
 
                 await store.log(task_id, f"Step {step.step_id} ✓", "info",
                                 {"result": _short(result)})
@@ -142,6 +148,24 @@ class ExecutionAgent:
                 )
                 return StepResult(step_id=step.step_id, status=StepStatus.FAILED,
                                   error=f"SECURITY: {e}", retries_used=attempt)
+
+            except asyncio.TimeoutError:
+                last_error = f"Step timed out after {step_timeout}s"
+                await store.log(task_id, f"Step {step.step_id} TIMEOUT: {last_error}", "error")
+                await store.push_stream_event(
+                    task_id,
+                    "step_done",
+                    {
+                        "step_id": step.step_id,
+                        "tool": tool_s,
+                        "action": step.action,
+                        "status": StepStatus.FAILED.value,
+                        "preview": "",
+                        "error": last_error,
+                    },
+                )
+                return StepResult(step_id=step.step_id, status=StepStatus.FAILED,
+                                  error=last_error, retries_used=attempt)
 
             except Exception as e:
                 last_error = str(e)

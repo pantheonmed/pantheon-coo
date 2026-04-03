@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     resend_api_key: str = ""
 
+    # News/search backend: "google_rss" (default) or "duckduckgo".
+    news_search_backend: str = "google_rss"
+
     # API auth: none | apikey | jwt (read by security/auth.py via os.environ after load)
     auth_mode: str = "none"
 
