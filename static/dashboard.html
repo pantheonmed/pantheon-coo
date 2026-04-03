@@ -441,9 +441,9 @@
 
 <script>
 (function () {
-  const API = (typeof window !== 'undefined' && window.PANTHEON_CONFIG && window.PANTHEON_CONFIG.apiUrl)
-    ? String(window.PANTHEON_CONFIG.apiUrl).replace(/\/$/, '')
-    : 'http://localhost:8002';
+  const API = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? String(window.location.origin).replace(/\/$/, '')
+    : '';
   const TOKEN_KEY = 'coo_token';
   /** Also checked by getAuthToken: standard keys from other clients */
   const TOKEN_FALLBACK_KEYS = ['token', 'access_token'];
