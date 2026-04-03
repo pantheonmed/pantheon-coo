@@ -632,6 +632,16 @@ async def landing_page():
     return FileResponse("static/landing.html")
 
 
+@app.get("/privacy", summary="Privacy policy (HTML)")
+async def privacy_page():
+    return FileResponse("static/privacy.html")
+
+
+@app.get("/terms", summary="Terms of service (HTML)")
+async def terms_page():
+    return FileResponse("static/terms.html")
+
+
 @app.get("/docs-page", summary="Static developer documentation (HTML)")
 async def docs_page():
     return FileResponse("static/docs.html")
