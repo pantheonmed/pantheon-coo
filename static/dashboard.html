@@ -1282,12 +1282,52 @@
     if (!plan || !plan.steps || !plan.steps.length) {
       return '<div class="empty">No plan yet.</div>';
     }
+    var resultsByStep = {};
+    try {
+      (currentTask.results || []).forEach(function (r) {
+        if (r && r.step_id != null) resultsByStep[r.step_id] = r;
+      });
+    } catch (e) {}
+    var taskFinished = currentTask.status === 'done' || currentTask.status === 'failed';
+
+    function toOutputText(res) {
+      if (!res || !res.result) return '';
+      try {
+        if (res.result.stdout != null) return String(res.result.stdout);
+        if (res.result.output != null) return String(res.result.output);
+        if (res.result.message != null) return String(res.result.message);
+        if (typeof res.result === 'string') return res.result;
+        if (res.result.stderr != null && String(res.result.stderr).trim()) return String(res.result.stderr);
+        return JSON.stringify(res.result, null, 2);
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function stepStatusBadge(step, res) {
+      var st = (res && res.status) ? String(res.status).toLowerCase() : '';
+      if (!res && !taskFinished) return { label: 'pending', cls: 'badge-queued' };
+      if (!res) return { label: 'pending', cls: 'badge-queued' };
+      if (st === 'success') return { label: 'done', cls: 'badge-done' };
+      if (st === 'failed') return { label: 'failed', cls: 'badge-failed' };
+      if (st === 'skipped') return { label: 'skipped', cls: 'badge-queued' };
+      if (st === 'done') return { label: 'done', cls: 'badge-done' };
+      if (st === 'pending') return { label: 'pending', cls: 'badge-queued' };
+      return { label: st || 'pending', cls: 'badge-queued' };
+    }
+
     var html = (plan.goal_summary ? '<p style="margin-bottom:12px;color:var(--muted)">' + esc(plan.goal_summary) + '</p>' : '');
     html += '<ol style="padding-left:20px;">';
     plan.steps.forEach(function (s) {
+      var res = resultsByStep[s.step_id];
+      var badge = stepStatusBadge(s, res);
+      var outText = toOutputText(res);
+      if (outText && outText.length > 6000) outText = outText.slice(0, 6000) + '…';
+      var outHtml = outText ? ('<br><pre style="margin:10px 0 0;white-space:pre-wrap;word-break:break-word;background:var(--bg2);padding:10px;border:1px solid var(--border);border-radius:10px;max-height:220px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;">' + esc(outText) + '</pre>') : '';
       html += '<li style="margin-bottom:10px;"><b>#' + esc(s.step_id) + '</b> ' + esc(s.tool) + '.' + esc(s.action) +
         (s.description ? '<br><span style="color:var(--muted);font-size:12px">' + esc(s.description) + '</span>' : '') +
-        '<br><span style="font-size:11px;color:var(--muted)">' + esc(s.status || '') + '</span></li>';
+        '<br><span class="badge ' + esc(badge.cls) + '" style="text-transform:none;">' + esc(badge.label) + '</span>' +
+        outHtml + '</li>';
     });
     html += '</ol>';
     return html;
@@ -1395,6 +1435,18 @@
         '</div>'
       );
     }
+    var combinedStdout = '';
+    try {
+      if (currentTask && (currentTask.status === 'done' || currentTask.status === 'failed') && currentTask.results) {
+        combinedStdout = (currentTask.results || []).map(function (r) {
+          if (!r || !r.result) return '';
+          if (r.result.stdout != null) return String(r.result.stdout);
+          if (r.result.output != null) return String(r.result.output);
+          if (r.result.message != null) return String(r.result.message);
+          return '';
+        }).filter(Boolean).join('\n');
+      }
+    } catch (e) {}
     return (
       '<div style="max-width:900px;display:flex;flex-direction:column;gap:10px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
@@ -1402,7 +1454,7 @@
       '<button type="button" class="btn-ghost" id="terminal-clear">Clear</button>' +
       '</div>' +
       '<div id="terminal-err" class="err" style="display:none;"></div>' +
-      '<div id="terminal-out" style="border:1px solid var(--border);border-radius:10px;background:var(--bg2);padding:12px;min-height:320px;max-height:420px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;"></div>' +
+      '<div id="terminal-out" style="border:1px solid var(--border);border-radius:10px;background:var(--bg2);padding:12px;min-height:320px;max-height:420px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;">' + esc(combinedStdout) + '</div>' +
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
       '<input id="terminal-cmd" placeholder="e.g. ls -la" style="flex:1;min-width:220px;padding:10px 12px;" />' +
       '<button type="button" class="btn-primary" id="terminal-run">Run</button>' +
