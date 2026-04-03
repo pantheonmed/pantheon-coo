@@ -80,7 +80,7 @@ Only use a custom tool if it is explicitly listed as available.
 class PlanningAgent(BaseAgent[PlanningInput, PlanningOutput]):
     name = "planning"
     system_prompt = SYSTEM
-    max_tokens = 2048
+    max_tokens = 4000
 
     async def run(self, inp: PlanningInput) -> PlanningOutput:
         import json

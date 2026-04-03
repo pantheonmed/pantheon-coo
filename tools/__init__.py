@@ -83,6 +83,12 @@ REGISTRY: dict = {
 
 
 async def run_tool(tool: ToolName, action: str, params: dict):
+    # Pseudo-tool: communicate → treat as a no-op that records a message.
+    if tool == ToolName.COMMUNICATE:
+        # Planner can pass either {"message": "..."} or {"content": "..."}.
+        msg = params.get("message") or params.get("content") or ""
+        return {"message": msg}
+
     # Custom tools (Phase 3 — dynamically built)
     if tool == ToolName.CUSTOM:
         custom_name: str = params.pop("_tool_name", "")

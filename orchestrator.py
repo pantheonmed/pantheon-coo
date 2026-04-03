@@ -331,13 +331,38 @@ async def run(
                 from agents.planner import SYSTEM as _planner_default_system
                 _planner.system_prompt = _planner_default_system
 
-            with span("agent.planning", {"task_id": task_id}):
-                plan = await _planner.run(
-                    PlanningInput(
-                        reasoning=reasoning,
-                        memory_snippets=plan_snippets,
-                        language=context.get("language", settings.default_language),
+            try:
+                with span("agent.planning", {"task_id": task_id}):
+                    plan = await _planner.run(
+                        PlanningInput(
+                            reasoning=reasoning,
+                            memory_snippets=plan_snippets,
+                            language=context.get("language", settings.default_language),
+                        )
                     )
+            except Exception as e:
+                # Fallback: simple one-step plan that just communicates output via terminal.
+                from models import ExecutionStep, ToolName
+
+                await store.log(
+                    task_id,
+                    f"Planning agent error, using fallback plan: {e}",
+                    "error",
+                )
+                summary = f"Fallback plan for: {reasoning.understood_goal}"
+                step = ExecutionStep(
+                    step_id=1,
+                    tool=ToolName.TERMINAL,
+                    action="run_command",
+                    params={"command": f"echo {reasoning.understood_goal}"},
+                    depends_on=[],
+                    description="Fallback: echo understood goal to terminal.",
+                )
+                plan = PlanningOutput(
+                    goal_summary=summary,
+                    steps=[step],
+                    estimated_seconds=5,
+                    notes=f"Planner failed: {e}",
                 )
 
             await store.push_stream_event(

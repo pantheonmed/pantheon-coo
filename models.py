@@ -33,6 +33,7 @@ class StepStatus(str, Enum):
 class ToolName(str, Enum):
     FILESYSTEM = "filesystem"
     TERMINAL   = "terminal"
+    COMMUNICATE = "communicate"
     BROWSER    = "browser"
     HTTP       = "http"
     EMAIL      = "email"      # Phase 3 ✓
