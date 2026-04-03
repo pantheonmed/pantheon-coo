@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     # News/search backend: "google_rss" (default) or "duckduckgo".
     news_search_backend: str = "google_rss"
 
+    # Web search (researcher tool): Tavily when set; otherwise DuckDuckGo fallback.
+    tavily_api_key: str = ""
+    # Optional NewsAPI.org key for future news integrations.
+    news_api_key: str = ""
+
     # API auth: none | apikey | jwt (read by security/auth.py via os.environ after load)
     auth_mode: str = "none"
 

@@ -30,9 +30,10 @@ from typing import Optional
 from config import settings
 from models import (
     TaskStatus, TaskRecord, CommandResponse,
-    ReasoningInput, PlanningInput, ExecutionInput,
+    ReasoningInput, ReasoningOutput, PlanningInput, ExecutionInput,
     EvaluatorInput, MemoryInput,
     PlanningOutput, ExecutionOutput, EvaluatorOutput,
+    ExecutionStep, ToolName,
 )
 from agents import (
     ReasoningAgent, PlanningAgent, ExecutionAgent,
@@ -65,6 +66,47 @@ def _clip(text: str, n: int = 220) -> str:
     if not text:
         return ""
     return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def _research_plan_enforce_researcher(plan: PlanningOutput, reasoning: ReasoningOutput) -> PlanningOutput:
+    """
+    For research goals: use the researcher tool for web search — never terminal curl/wget.
+    Strips unsafe terminal web-fetch steps and inserts research_topic when missing.
+    """
+    if (reasoning.goal_type or "").strip().lower() != "research":
+        return plan
+    topic = (reasoning.understood_goal or "").strip()[:2000]
+    kept: list[ExecutionStep] = []
+    for s in plan.steps:
+        if s.tool == ToolName.TERMINAL and (s.action or "").strip().lower() == "run_command":
+            cmd = (s.params or {}).get("command", "") or ""
+            c = cmd.strip().lower()
+            if c.startswith("curl ") or c.startswith("wget "):
+                continue
+        kept.append(s)
+    has_rs = any(s.tool == ToolName.RESEARCHER for s in kept)
+    if not has_rs:
+        kept.insert(
+            0,
+            ExecutionStep(
+                step_id=1,
+                tool=ToolName.RESEARCHER,
+                action="research_topic",
+                params={"topic": topic, "depth": "standard", "save_to_file": True},
+                depends_on=[],
+                description="Web research via Tavily/DuckDuckGo (not terminal curl).",
+            ),
+        )
+    new_steps: list[ExecutionStep] = []
+    for i, s in enumerate(kept, start=1):
+        d = s.model_dump()
+        d["step_id"] = i
+        d["depends_on"] = [i - 1] if i > 1 else []
+        new_steps.append(ExecutionStep(**d))
+    note = (plan.notes or "").strip()
+    extra = "[research: terminal curl/wget removed; researcher tool used for web search]"
+    notes_out = f"{note} {extra}".strip() if note else extra
+    return plan.model_copy(update={"steps": new_steps, "notes": notes_out})
 
 
 async def _maybe_fix_and_run_generated_code(
@@ -341,29 +383,43 @@ async def run(
                         )
                     )
             except Exception as e:
-                # Fallback: simple one-step plan that just communicates output via terminal.
-                from models import ExecutionStep, ToolName
-
+                # Fallback: echo via terminal, or researcher for research goals (no curl).
                 await store.log(
                     task_id,
                     f"Planning agent error, using fallback plan: {e}",
                     "error",
                 )
                 summary = f"Fallback plan for: {reasoning.understood_goal}"
-                step = ExecutionStep(
-                    step_id=1,
-                    tool=ToolName.TERMINAL,
-                    action="run_command",
-                    params={"command": f"echo {reasoning.understood_goal}"},
-                    depends_on=[],
-                    description="Fallback: echo understood goal to terminal.",
-                )
+                if (reasoning.goal_type or "").strip().lower() == "research":
+                    step = ExecutionStep(
+                        step_id=1,
+                        tool=ToolName.RESEARCHER,
+                        action="research_topic",
+                        params={
+                            "topic": (reasoning.understood_goal or "")[:2000],
+                            "depth": "standard",
+                            "save_to_file": True,
+                        },
+                        depends_on=[],
+                        description="Fallback: research_topic (planner error).",
+                    )
+                else:
+                    step = ExecutionStep(
+                        step_id=1,
+                        tool=ToolName.TERMINAL,
+                        action="run_command",
+                        params={"command": f"echo {reasoning.understood_goal}"},
+                        depends_on=[],
+                        description="Fallback: echo understood goal to terminal.",
+                    )
                 plan = PlanningOutput(
                     goal_summary=summary,
                     steps=[step],
                     estimated_seconds=5,
                     notes=f"Planner failed: {e}",
                 )
+
+            plan = _research_plan_enforce_researcher(plan, reasoning)
 
             await store.push_stream_event(
                 task_id,

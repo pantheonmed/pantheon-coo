@@ -51,7 +51,18 @@ async def test_research_topic_creates_file(tmp_path, monkeypatch):
     async def fake_news(p):
         return [{"title": "A", "url": "https://u.test/a", "summary": "", "source": "s", "date": "", "sentiment": "neutral"}]
 
-    with patch.object(rs_mod, "_search_news", side_effect=fake_news):
+    async def fake_tavily(q, limit=5):
+        return [
+            {
+                "title": "A",
+                "url": "https://u.test/a",
+                "summary": "x",
+                "source": "s",
+                "published": "",
+            }
+        ]
+
+    with patch.object(rs_mod, "tavily_search", side_effect=fake_tavily):
         r = await rs_mod.execute(
             "research_topic",
             {"topic": "widgets", "depth": "quick", "save_to_file": True},

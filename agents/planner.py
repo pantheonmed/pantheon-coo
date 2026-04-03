@@ -39,6 +39,15 @@ Allowed commands: ls, pwd, echo, cat, head, tail, wc, grep, find, tree,
 mkdir, touch, cp, mv, python3, pip3, npm, node, git, curl, wget, ping,
 df, du, free, ps
 
+For curl/wget: one invocation per step (flags like -sSL -o are OK); never chain with ; or &&.
+
+### researcher (web search & synthesis)
+Use when goal_type is research or the user asks to search the web / news / market research.
+Actions:
+  research_topic → { "topic": "string", "depth": "quick|standard", "save_to_file": true }
+  search_news    → { "query": "string", "limit": int, "language": "en" }
+Do NOT use the terminal to curl or wget URLs for research — use researcher.research_topic instead.
+
 ## Workspace: /tmp/pantheon_v2  (all file operations MUST use this path)
 
 ### custom  ← Phase 3 dynamically built tools
@@ -52,7 +61,7 @@ Only use a custom tool if it is explicitly listed as available.
 1. Return ONLY valid JSON — no markdown, no text outside JSON
 2. Every step must have a unique step_id starting at 1
 3. Use depends_on to sequence steps — the executor respects this
-4. Never use shell operators (&&, ||, ;, |, >, <) — use separate steps
+4. Never use shell operators (&&, ||, ;, |, >, <) — use separate steps (e.g. two curl steps, not curl a; curl b)
 5. Max 20 steps per plan
 6. All file paths must be under /tmp/pantheon_v2/
 7. Steps should be atomic: one action, one purpose
@@ -66,7 +75,7 @@ Only use a custom tool if it is explicitly listed as available.
   "steps": [
     {
       "step_id": 1,
-      "tool": "filesystem|terminal",
+      "tool": "filesystem|terminal|researcher",
       "action": "action_name",
       "params": { ... },
       "depends_on": [],

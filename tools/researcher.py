@@ -77,13 +77,11 @@ def _parse_rss(xml_text: str, limit: int) -> list[dict[str, Any]]:
     return items
 
 
-async def real_web_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+async def duckduckgo_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     """
     Real web search via DuckDuckGo free endpoint.
-    Returns: [{title, url, summary}, ...]
+    Returns: [{title, url, summary, source, date}, ...]
     """
-    import httpx
-
     url = "https://api.duckduckgo.com/"
     params = {
         "q": query,
@@ -114,29 +112,79 @@ async def real_web_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     return results
 
 
+async def real_web_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Alias for :func:`duckduckgo_search` (backwards compatibility)."""
+    return await duckduckgo_search(query, limit)
+
+
+async def tavily_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Primary web search: Tavily API when configured, else DuckDuckGo."""
+    if not (getattr(settings, "tavily_api_key", None) or "").strip():
+        return await duckduckgo_search(query, limit)
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": settings.tavily_api_key,
+                    "query": query,
+                    "max_results": limit,
+                    "search_depth": "basic",
+                },
+                timeout=30.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+    except Exception:
+        return await duckduckgo_search(query, limit)
+
+    results: list[dict[str, Any]] = []
+    for item in data.get("results", []) or []:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content") or ""
+        results.append(
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "summary": (content[:500] if isinstance(content, str) else ""),
+                "source": item.get("source", "") or "",
+                "published": item.get("published_date", "") or "",
+            }
+        )
+    return results
+
+
+def _normalize_search_hit(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Tavily / DuckDuckGo rows to the schema used by search_news / synthesis."""
+    title = item.get("title", "")
+    return {
+        "title": title,
+        "summary": (item.get("summary") or "")[:500],
+        "url": item.get("url", ""),
+        "source": item.get("source", "") or "web",
+        "date": item.get("published") or item.get("date", ""),
+        "sentiment": _simple_sentiment(title),
+    }
+
+
 async def _search_news(p: dict[str, Any]) -> list[dict[str, Any]]:
     query = str(p.get("query") or "").strip()
     if not query:
         raise ValueError("query is required.")
     limit = min(int(p.get("limit") or 10), 50)
     language = str(p.get("language") or "en")
+
+    if (getattr(settings, "tavily_api_key", None) or "").strip():
+        items = await tavily_search(query, limit)
+        return [_normalize_search_hit(it) for it in items]
+
     backend = str(getattr(settings, "news_search_backend", "google_rss") or "google_rss").lower()
 
     if backend == "duckduckgo":
         try:
-            items = await real_web_search(query, limit=limit)
-            # normalize to expected schema
-            return [
-                {
-                    "title": it.get("title", ""),
-                    "summary": it.get("summary", "")[:500],
-                    "url": it.get("url", ""),
-                    "source": it.get("source", "DuckDuckGo"),
-                    "date": it.get("date", ""),
-                    "sentiment": it.get("sentiment", _simple_sentiment(it.get("title", ""))),
-                }
-                for it in items
-            ]
+            items = await duckduckgo_search(query, limit=limit)
+            return [_normalize_search_hit(it) for it in items]
         except Exception:
             # Fallback to RSS parsing below
             pass
@@ -154,7 +202,9 @@ async def _research_topic(p: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("topic is required.")
     depth = str(p.get("depth") or "standard").lower()
     save = bool(p.get("save_to_file", True))
-    bullets = await _search_news({"query": topic, "limit": 8 if depth == "quick" else 12})
+    lim = 8 if depth == "quick" else 12
+    raw = await tavily_search(topic, lim)
+    bullets = [_normalize_search_hit(it) for it in raw]
     lines = "\n".join(f"- {b.get('title')}: {b.get('url')}" for b in bullets[:10])
     resp = call_model(
         system="You are a research synthesizer for executives. Be concise and factual.",

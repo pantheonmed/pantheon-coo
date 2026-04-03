@@ -493,6 +493,7 @@ def _check_terminal(step: ExecutionStep) -> None:
             f"Allowed: {sorted(settings.allowed_commands)}"
         )
 
+    # One shell command per step: no chaining (curl a; curl b). curl may use multiple flags per argv.
     for pattern in DANGEROUS_SHELL:
         if pattern in cmd:
             raise SecurityError(

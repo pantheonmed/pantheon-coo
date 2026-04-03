@@ -67,6 +67,12 @@ class TestTerminalSandbox:
         step = self._make_step("git status")
         validate_step(step)
 
+    def test_curl_with_separate_flags_allowed(self):
+        step = self._make_step(
+            "curl -sSL -o /tmp/pantheon_v2/out.txt https://example.com"
+        )
+        validate_step(step)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sandbox — filesystem validation
