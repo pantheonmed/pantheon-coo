@@ -441,9 +441,6 @@
 
 <script>
 (function () {
-  const API = (typeof window !== 'undefined' && window.location && window.location.origin)
-    ? String(window.location.origin).replace(/\/$/, '')
-    : '';
   const TOKEN_KEY = 'coo_token';
   /** Also checked by getAuthToken: standard keys from other clients */
   const TOKEN_FALLBACK_KEYS = ['token', 'access_token'];
@@ -467,7 +464,7 @@
 
   async function loadBranding() {
     try {
-      var r = await fetch(API + '/config/branding');
+      var r = await fetch(window.location.origin + '/config/branding');
       if (!r.ok) return;
       var b = await r.json();
       if (b.primary_color) document.documentElement.style.setProperty('--accent', b.primary_color);
@@ -476,7 +473,7 @@
 
   async function checkAuthMode() {
     try {
-      const r = await fetch(API + '/health');
+      const r = await fetch(window.location.origin + '/health');
       const d = await r.json();
       return d;
     } catch (e) {
@@ -524,7 +521,7 @@
     }
     const init = { method, headers };
     if (opts.body !== undefined) init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
-    return fetch(API + path, init);
+    return fetch(window.location.origin + path, init);
   }
 
   function saveSession(token, profile) {
@@ -899,7 +896,7 @@
       return;
     }
     try {
-      var resp = await fetch(API + '/auth/login', {
+      var resp = await fetch(window.location.origin + '/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, password: password })
@@ -942,7 +939,7 @@
       return;
     }
     try {
-      var resp = await fetch(API + '/auth/register', {
+      var resp = await fetch(window.location.origin + '/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -958,7 +955,7 @@
         err.style.display = 'block';
         return;
       }
-      var loginResp = await fetch(API + '/auth/login', {
+      var loginResp = await fetch(window.location.origin + '/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, password: password })
@@ -1369,7 +1366,7 @@
 
   async function renderMemoryHtml() {
     try {
-      var r = await fetch(API + '/memory/learnings?limit=20', { headers: authHeaders() });
+      var r = await fetch(window.location.origin + '/memory/learnings?limit=20', { headers: authHeaders() });
       if (!r.ok) return '<div class="empty">Memory unavailable (' + r.status + ')</div>';
       var data = await r.json();
       var L = data.learnings || [];
@@ -1661,7 +1658,7 @@
       return;
     }
     try {
-      const r = await fetch(API + '/tasks?limit=1', {
+      const r = await fetch(window.location.origin + '/tasks?limit=1', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
