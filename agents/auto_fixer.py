@@ -83,7 +83,7 @@ class AutoFixer:
         code: str,
         language: str = "python",
         file_path: str,
-        cwd: str = "/tmp/pantheon_v2",
+        cwd: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Loop:
@@ -107,9 +107,11 @@ class AutoFixer:
         last: RunResult | None = None
         current = code or ""
 
+        base_cwd = cwd or str(Path(settings.workspace_dir).resolve())
+
         for attempt in range(1, int(self.max_attempts) + 1):
             await self._write(file_path, current)
-            last = await self._run(file_path, cwd=cwd)
+            last = await self._run(file_path, cwd=base_cwd)
             if last.exit_code == 0:
                 return {
                     "success": True,

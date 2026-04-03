@@ -103,6 +103,11 @@ async def _maybe_fix_and_run_generated_code(
 
     ran: list[dict] = []
     fixer = AutoFixer()
+    user_id = (context or {}).get("user_id")
+    from config import settings as _settings
+    base_ws = Path(_settings.workspace_dir).resolve()
+    if user_id:
+        base_ws = base_ws / "users" / str(user_id)
     for file_path in paths[: max(1, int(max_files))]:
         try:
             code = await fs_tool.execute("read_file", {"path": file_path})
@@ -116,7 +121,7 @@ async def _maybe_fix_and_run_generated_code(
             "agent_start",
             {"agent": "auto_fixer", "file_path": file_path},
         )
-        res = await fixer.fix_and_run(code=code, file_path=file_path)
+        res = await fixer.fix_and_run(code=code, file_path=file_path, cwd=str(base_ws))
         await store.push_stream_event(
             task_id,
             "agent_done",
@@ -139,8 +144,9 @@ async def _maybe_fix_and_run_generated_code(
             # Optional: if this was inside a pulled GitHub repo, push a single-file update via API.
             try:
                 gh_repo = (context or {}).get("github_repo")
-                if gh_repo and (settings.github_token or "").strip():
-                    root = Path("/tmp/pantheon_v2").resolve() / str(gh_repo).split("/")[-1]
+                gh_local = (context or {}).get("github_local_path") or ""
+                if gh_repo and (settings.github_token or "").strip() and gh_local:
+                    root = Path(gh_local).resolve()
                     fp = Path(str(res.get("file_path") or file_path)).resolve()
                     if root in fp.parents:
                         rel = str(fp.relative_to(root))
@@ -220,7 +226,12 @@ async def run(
                 from agents.github_agent import GitHubAgent
 
                 await store.log(task_id, f"GitHub repo detected: {repo} — pulling…", "info")
-                local = f"/tmp/pantheon_v2/{repo.split('/')[-1]}"
+                from config import settings as _settings
+
+                base_ws = Path(_settings.workspace_dir).resolve()
+                if uid0:
+                    base_ws = base_ws / "users" / str(uid0)
+                local = str(base_ws / repo.split("/")[-1])
                 await GitHubAgent().pull_repo(repo, local)
                 context["github_local_path"] = local
         except Exception as e:
