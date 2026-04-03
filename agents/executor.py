@@ -22,6 +22,7 @@ from models import (
 )
 from security.sandbox import SecurityError, validate_step
 from tools import run_tool
+from tools.task_context import reset_task_user_id, set_task_user_id
 import memory.store as store
 
 
@@ -29,11 +30,25 @@ class ExecutionAgent:
     name = "execution"
 
     async def run(self, inp: ExecutionInput) -> ExecutionOutput:
+        ctx_tok = set_task_user_id(inp.user_id)
         results: dict[int, StepResult] = {}
         raw_outputs: dict[int, Any] = {}
         pending = list(inp.plan.steps)
         safety_limit = len(pending) + 5
 
+        try:
+            return await self._run_inner(inp, results, raw_outputs, pending, safety_limit)
+        finally:
+            reset_task_user_id(ctx_tok)
+
+    async def _run_inner(
+        self,
+        inp: ExecutionInput,
+        results: dict[int, StepResult],
+        raw_outputs: dict[int, Any],
+        pending: list,
+        safety_limit: int,
+    ) -> ExecutionOutput:
         iteration = 0
         while pending and iteration < safety_limit:
             iteration += 1

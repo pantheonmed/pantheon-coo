@@ -121,6 +121,7 @@ class PlanningOutput(BaseModel):
 class ExecutionInput(BaseModel):
     task_id: str
     plan: PlanningOutput
+    user_id: Optional[str] = None
 
 class StepResult(BaseModel):
     step_id: int
@@ -143,6 +144,9 @@ class EvaluatorInput(BaseModel):
     plan: PlanningOutput
     execution: ExecutionOutput
     task_id: Optional[str] = None          # for grounded verification logs
+    goal_type: str = ""
+    user_id: Optional[str] = None
+    workspace_path: Optional[str] = None
 
 class EvaluatorOutput(BaseModel):
     score: float                           # 0.0 – 1.0

@@ -402,6 +402,7 @@
         <button type="button" class="tab" data-tab="team" id="team-tab-btn">Team</button>
         <button type="button" class="tab" data-tab="marketplace" id="marketplace-tab-btn">Marketplace</button>
         <button type="button" class="tab" data-tab="insights" id="insights-tab-btn">Analytics+</button>
+        <button type="button" class="tab" data-tab="integrations" id="integrations-tab-btn" title="API keys">Integrations</button>
         <button type="button" class="tab" data-tab="admin" id="admin-tab-btn" style="display:none;" title="Admin only">Admin <span class="admin-dot" style="color:var(--red);font-size:10px;">●</span></button>
       </div>
       <div class="tab-content" id="panel-content">
@@ -459,6 +460,8 @@
 
 <script>
 (function () {
+  /** API base — works on localhost and production (e.g. trycooai.com). */
+  const API = window.location.origin;
   const TOKEN_KEY = 'coo_token';
   /** Also checked by getAuthToken: standard keys from other clients */
   const TOKEN_FALLBACK_KEYS = ['token', 'access_token'];
@@ -482,7 +485,7 @@
 
   async function loadBranding() {
     try {
-      var r = await fetch(window.location.origin + '/config/branding');
+      var r = await fetch(API + '/config/branding');
       if (!r.ok) return;
       var b = await r.json();
       if (b.primary_color) document.documentElement.style.setProperty('--accent', b.primary_color);
@@ -491,7 +494,7 @@
 
   async function checkAuthMode() {
     try {
-      const r = await fetch(window.location.origin + '/health');
+      const r = await fetch(API + '/health');
       const d = await r.json();
       return d;
     } catch (e) {
@@ -539,7 +542,7 @@
     }
     const init = { method, headers };
     if (opts.body !== undefined) init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
-    return fetch(window.location.origin + path, init);
+    return fetch(API + path, init);
   }
 
   function saveSession(token, profile) {
@@ -927,7 +930,7 @@
       return;
     }
     try {
-      var resp = await fetch(window.location.origin + '/auth/login', {
+      var resp = await fetch(API + '/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, password: password })
@@ -970,7 +973,7 @@
       return;
     }
     try {
-      var resp = await fetch(window.location.origin + '/auth/register', {
+      var resp = await fetch(API + '/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -986,7 +989,7 @@
         err.style.display = 'block';
         return;
       }
-      var loginResp = await fetch(window.location.origin + '/auth/login', {
+      var loginResp = await fetch(API + '/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, password: password })
@@ -1400,11 +1403,21 @@
         ? '<div style="margin-top:10px;color:var(--red);font-size:12px;white-space:pre-wrap;">' + esc(currentTask.error) + '</div>'
         : '';
 
+      var sumHtml = esc(currentTask.summary || '').replace(/\n/g, '<br>');
+      var sc = currentTask.evaluation_score;
+      var scCol = sc == null ? '#888' : (Number(sc) >= 0.8 ? '#00ff88' : (Number(sc) >= 0.5 ? '#ffaa00' : '#ff4444'));
+      var scoreLine = sc == null ? '' : ('<div id="scoreDisplay" style="margin-bottom:10px;"><span style="color:' + scCol + ';font-size:22px;font-weight:bold">' + (Number(sc) * 100).toFixed(0) + '%</span> <span style="color:#888;font-size:13px;">quality score</span></div>');
+      var failHint = (currentTask.status === 'failed')
+        ? ('<div style="margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--muted);">' +
+           '<strong style="color:var(--text);">Need better web research?</strong> Add a free Tavily key: open the <b>Integrations</b> tab, or set <code>TAVILY_API_KEY</code> on the server. See <a href="https://tavily.com" target="_blank" rel="noopener">tavily.com</a>.</div>')
+        : '';
       taskResultHtml =
         '<div id="taskResult" style="background:#1a1a2e;border:1px solid #7c6ff7;border-radius:12px;padding:20px;margin-top:16px;">' +
         '<h3 style="color:#7c6ff7;margin-bottom:12px;">✅ Task Result</h3>' +
-        '<div id="resultContent" style="color:#fff;white-space:pre-wrap;font-family:monospace;">' + esc(currentTask.summary || '') + '</div>' +
-        '<div id="resultFiles" style="margin-top:12px;">' + fileHtml + errHtml + '</div>' +
+        scoreLine +
+        '<div id="resultContent" style="color:#fff;white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;">' + sumHtml + '</div>' +
+        '<div id="resultFiles" style="margin-top:12px;"><strong style="font-size:13px;">📁 Files created</strong>' + fileHtml + errHtml + '</div>' +
+        failHint +
         '</div>';
     }
 
@@ -1432,11 +1445,64 @@
     if (score == null && !currentTask.summary) {
       return '<div class="empty">No evaluation yet.</div>';
     }
+    var color = score == null ? 'var(--accent)' : (Number(score) >= 0.8 ? '#00ff88' : (Number(score) >= 0.5 ? '#ffaa00' : '#ff4444'));
     var h = '';
-    if (score != null) h += '<p style="font-size:2rem;font-weight:700;color:var(--accent);margin-bottom:12px;">' + Number(score).toFixed(2) + '</p>';
-    h += '<p>' + esc(currentTask.summary || '') + '</p>';
+    if (score != null) {
+      h += '<div id="scoreDisplayEval"><span style="color:' + color + ';font-size:2rem;font-weight:700;">' + (Number(score) * 100).toFixed(0) + '%</span> <span style="color:#888;font-size:14px;">quality score</span></div>';
+    }
+    h += '<p style="margin-top:12px;">' + esc(currentTask.summary || '') + '</p>';
     if (currentTask.error) h += '<p style="color:var(--red);margin-top:12px;">' + esc(currentTask.error) + '</p>';
     return h;
+  }
+
+  async function loadIntegrationsPanelHtml() {
+    var h = '<div id="integrations-panel"><h3 style="margin:0 0 8px;">Integrations</h3>' +
+      '<p class="muted" style="font-size:13px;margin-bottom:16px;">Optional API keys for web search and notifications. Saved per account.</p>';
+    try {
+      var r = await apiFetch('/auth/me/settings');
+      if (!r.ok) {
+        return h + '<p class="muted">Sign in (JWT) to save integration keys.</p></div>';
+      }
+      var d = await r.json();
+      h += '<div class="field"><label>Tavily API key</label><input type="password" id="int-tavily" placeholder="tvly-…" autocomplete="off" /></div>';
+      h += '<div class="field"><label>NewsAPI key</label><input type="password" id="int-news" placeholder="optional" autocomplete="off" /></div>';
+      h += '<div class="field"><label>WhatsApp number</label><input type="text" id="int-wa" placeholder="+91…" /></div>';
+      h += '<div class="field"><label>SMTP host</label><input type="text" id="int-smtp-host" placeholder="smtp.gmail.com" /></div>';
+      h += '<div class="field"><label>SMTP user</label><input type="text" id="int-smtp-user" /></div>';
+      h += '<div class="field"><label>SMTP password</label><input type="password" id="int-smtp-pass" autocomplete="off" /></div>';
+      h += '<button type="button" class="btn-primary" id="int-save">Save</button> ';
+      h += '<span id="int-msg" class="muted" style="font-size:12px;margin-left:8px;"></span></div>';
+      setTimeout(function () {
+        if (d.tavily_api_key) document.getElementById('int-tavily').placeholder = d.tavily_api_key;
+        if (d.news_api_key) document.getElementById('int-news').placeholder = d.news_api_key;
+        if (d.whatsapp_phone) document.getElementById('int-wa').value = d.whatsapp_phone;
+        if (d.smtp_host) document.getElementById('int-smtp-host').value = d.smtp_host;
+        if (d.smtp_user) document.getElementById('int-smtp-user').value = d.smtp_user;
+        var save = document.getElementById('int-save');
+        if (save) save.onclick = async function () {
+          var msg = document.getElementById('int-msg');
+          try {
+            var body = {};
+            var tv = document.getElementById('int-tavily').value.trim();
+            var nw = document.getElementById('int-news').value.trim();
+            if (tv) body.tavily_api_key = tv;
+            if (nw) body.news_api_key = nw;
+            body.whatsapp_phone = document.getElementById('int-wa').value.trim() || null;
+            body.smtp_host = document.getElementById('int-smtp-host').value.trim() || null;
+            body.smtp_user = document.getElementById('int-smtp-user').value.trim() || null;
+            var sp = document.getElementById('int-smtp-pass').value;
+            if (sp) body.smtp_password = sp;
+            var rr = await apiFetch('/auth/me/settings', { method: 'PATCH', body: body });
+            msg.textContent = rr.ok ? 'Saved.' : ('Error ' + rr.status);
+          } catch (e) {
+            msg.textContent = e.message || 'Save failed';
+          }
+        };
+      }, 0);
+      return h;
+    } catch (e) {
+      return h + '<p class="muted">Could not load settings.</p></div>';
+    }
   }
 
   async function loadAdminPanelHtml() {
@@ -1499,7 +1565,7 @@
 
   async function renderMemoryHtml() {
     try {
-      var r = await fetch(window.location.origin + '/memory/learnings?limit=20', { headers: authHeaders() });
+      var r = await fetch(API + '/memory/learnings?limit=20', { headers: authHeaders() });
       if (!r.ok) return '<div class="empty">Memory unavailable (' + r.status + ')</div>';
       var data = await r.json();
       var L = data.learnings || [];
@@ -1640,6 +1706,10 @@
       panel.innerHTML = '<div id="insights-v2-section" class="ai-insights"><h3 style="margin:0 0 8px;">Analytics v2 + AI Insights</h3><div class="insights-charts" style="display:grid;gap:10px;"><div style="border:1px solid var(--border);border-radius:8px;padding:10px;">Hourly productivity heatmap (placeholder)</div><div style="border:1px solid var(--border);border-radius:8px;padding:10px;">Tool usage treemap (CSS)</div><div style="border:1px solid var(--border);border-radius:8px;padding:10px;">Success trend (SVG)</div></div><ul id="insights-recommendations" style="margin-top:12px;"><li>Run weekly report from <code>/insights/weekly-report</code></li></ul></div>';
       return;
     }
+    if (activeTab === 'integrations') {
+      panel.innerHTML = await loadIntegrationsPanelHtml();
+      return;
+    }
     if (!selectedTaskId) {
       panel.innerHTML = '<div class="empty">Select a task from the list.</div>';
       return;
@@ -1674,7 +1744,7 @@
       if (activeTab === 'logs') document.getElementById('panel-content').innerHTML = await loadLogsHtml();
       else if (activeTab === 'steps') document.getElementById('panel-content').innerHTML = renderPlanHtml();
       else if (activeTab === 'admin') document.getElementById('panel-content').innerHTML = await loadAdminPanelHtml();
-      else if (activeTab === 'team' || activeTab === 'marketplace' || activeTab === 'insights' || activeTab === 'terminal') await renderPanel();
+      else if (activeTab === 'team' || activeTab === 'marketplace' || activeTab === 'insights' || activeTab === 'integrations' || activeTab === 'terminal') await renderPanel();
     }, 3000);
   }
 
@@ -1803,7 +1873,7 @@
       return;
     }
     try {
-      const r = await fetch(window.location.origin + '/tasks?limit=1', {
+      const r = await fetch(API + '/tasks?limit=1', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });

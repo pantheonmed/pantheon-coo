@@ -54,14 +54,23 @@ BLOCKED_URL_HOSTS = {
     "169.254.169.254", "metadata.google.internal",
 }
 
-DANGEROUS_SHELL = ["&&", "||", ";", "|", "`", "$(", ">", ">>", "<"]
+DANGEROUS_SHELL = ["&&", "||", "|", "`", "$(", ">", ">>", "<"]
 
 MAX_COMMAND_LENGTH = 2000
 
+BLOCKED_SHELL_PATTERNS = [
+    "rm -rf",
+    "sudo",
+    "passwd",
+    "> /etc",
+    "mkfs",
+    "dd if=",
+    ":(){:|:&};:",
+]
+
 # Extra input sanitization for user-provided commands (API layer)
 DANGEROUS_PATTERNS = [
-    # Command injection
-    ";",
+    # Command injection (semicolon handled separately in sanitize_command)
     "&&",
     "||",
     "`",
@@ -106,10 +115,20 @@ def sanitize_command(command: str) -> str:
         raise SecurityError("Empty command")
     if len(raw) > MAX_COMMAND_LENGTH:
         raise SecurityError("Command too long")
+    command_lower = raw.lower()
+    for pattern in BLOCKED_SHELL_PATTERNS:
+        if pattern in command_lower:
+            raise SecurityError(f"Blocked: {pattern}")
     lower = raw.lower()
     for p in DANGEROUS_PATTERNS:
         if p.lower() in lower:
             raise SecurityError("Blocked: suspicious pattern detected")
+    if ";" in raw:
+        for part in raw.split(";"):
+            part_l = part.strip().lower()
+            for pattern in BLOCKED_SHELL_PATTERNS:
+                if pattern in part_l:
+                    raise SecurityError("Dangerous chained command blocked")
     return raw
 
 
@@ -476,16 +495,20 @@ def _check_google_sheets(step: ExecutionStep) -> None:
     validate_spreadsheet_id(str(sid))
 
 
-def _check_terminal(step: ExecutionStep) -> None:
-    cmd: str = step.params.get("command", "").strip()
-    if not cmd:
-        raise SecurityError("Terminal step has empty command.")
-
+def _check_terminal_segment(seg: str) -> None:
+    s = (seg or "").strip()
+    if not s:
+        return
+    low = s.lower()
+    for pattern in BLOCKED_SHELL_PATTERNS:
+        if pattern in low:
+            raise SecurityError(f"Blocked segment: {pattern}")
     try:
-        tokens = shlex.split(cmd)
+        tokens = shlex.split(s)
     except ValueError as e:
         raise SecurityError(f"Cannot parse command: {e}")
-
+    if not tokens:
+        return
     base = Path(tokens[0]).name
     if base not in settings.allowed_commands:
         raise SecurityError(
@@ -493,12 +516,23 @@ def _check_terminal(step: ExecutionStep) -> None:
             f"Allowed: {sorted(settings.allowed_commands)}"
         )
 
-    # One shell command per step: no chaining (curl a; curl b). curl may use multiple flags per argv.
+
+def _check_terminal(step: ExecutionStep) -> None:
+    cmd: str = step.params.get("command", "").strip()
+    if not cmd:
+        raise SecurityError("Terminal step has empty command.")
+
     for pattern in DANGEROUS_SHELL:
         if pattern in cmd:
             raise SecurityError(
                 f"Shell pattern '{pattern}' is not allowed. Use separate steps."
             )
+
+    if ";" in cmd:
+        for part in cmd.split(";"):
+            _check_terminal_segment(part)
+    else:
+        _check_terminal_segment(cmd)
 
 
 def _check_filesystem(step: ExecutionStep) -> None:

@@ -16,6 +16,8 @@ import httpx
 
 from agents.model_router import call_model
 from config import settings
+from security.sandbox import workspace_root
+from tools.task_context import get_task_user_id
 
 _INDUSTRY_QUERIES: dict[str, str] = {
     "medical": "medical devices healthcare India",
@@ -77,6 +79,40 @@ def _parse_rss(xml_text: str, limit: int) -> list[dict[str, Any]]:
     return items
 
 
+def _normalize_row(
+    title: str,
+    url: str,
+    summary: str,
+    source: str,
+    date: str,
+) -> dict[str, Any]:
+    return {
+        "title": title or "",
+        "summary": (summary or "")[:600],
+        "url": url or "",
+        "source": source or "web",
+        "date": date or "",
+        "sentiment": _simple_sentiment(title or ""),
+    }
+
+
+async def _effective_search_keys() -> tuple[str, str]:
+    tav = (getattr(settings, "tavily_api_key", None) or "").strip()
+    news = (getattr(settings, "news_api_key", None) or "").strip()
+    uid = get_task_user_id()
+    if uid:
+        try:
+            import memory.store as store_mod
+
+            u = await store_mod.get_user_settings(uid)
+            if u:
+                tav = (u.get("tavily_api_key") or tav or "").strip()
+                news = (u.get("news_api_key") or news or "").strip()
+        except Exception:
+            pass
+    return tav, news
+
+
 async def duckduckgo_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     """
     Real web search via DuckDuckGo free endpoint.
@@ -88,7 +124,7 @@ async def duckduckgo_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
         "format": "json",
         "no_html": 1,
     }
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         r = await client.get(url, params=params)
         r.raise_for_status()
         data = r.json()
@@ -96,7 +132,6 @@ async def duckduckgo_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     related = data.get("RelatedTopics", []) or []
     for item in related[:limit]:
-        # Some entries are nested; handle typical "Text" layout only.
         txt = item.get("Text") if isinstance(item, dict) else None
         if txt:
             results.append(
@@ -117,54 +152,114 @@ async def real_web_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
     return await duckduckgo_search(query, limit)
 
 
-async def tavily_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Primary web search: Tavily API when configured, else DuckDuckGo."""
-    if not (getattr(settings, "tavily_api_key", None) or "").strip():
-        return await duckduckgo_search(query, limit)
-    try:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": settings.tavily_api_key,
-                    "query": query,
-                    "max_results": limit,
-                    "search_depth": "basic",
-                },
-                timeout=30.0,
-            )
-            r.raise_for_status()
-            data = r.json()
-    except Exception:
-        return await duckduckgo_search(query, limit)
+async def smart_search(query: str, limit: int = 10) -> list[dict[str, Any]]:
+    """
+    Try APIs in order: Tavily → NewsAPI → DuckDuckGo → Google News RSS.
+    Usually returns results without any paid key (RSS / DDG).
+    """
+    q = (query or "").strip()
+    if not q:
+        return []
+    lim = max(1, min(int(limit), 50))
+    tavily_key, news_key = await _effective_search_keys()
 
-    results: list[dict[str, Any]] = []
-    for item in data.get("results", []) or []:
-        if not isinstance(item, dict):
-            continue
-        content = item.get("content") or ""
-        results.append(
-            {
-                "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "summary": (content[:500] if isinstance(content, str) else ""),
-                "source": item.get("source", "") or "",
-                "published": item.get("published_date", "") or "",
-            }
-        )
-    return results
+    if tavily_key:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.post(
+                    "https://api.tavily.com/search",
+                    json={
+                        "api_key": tavily_key,
+                        "query": q,
+                        "max_results": lim,
+                        "search_depth": "advanced",
+                    },
+                )
+                data = r.json()
+                rows = data.get("results") or []
+                if rows:
+                    out: list[dict[str, Any]] = []
+                    for x in rows[:lim]:
+                        if not isinstance(x, dict):
+                            continue
+                        content = x.get("content") or ""
+                        out.append(
+                            _normalize_row(
+                                x.get("title", ""),
+                                x.get("url", ""),
+                                (content[:600] if isinstance(content, str) else ""),
+                                x.get("source", "") or "",
+                                x.get("published_date", "") or "",
+                            )
+                        )
+                    if out:
+                        return out
+        except Exception:
+            pass
+
+    if news_key:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.get(
+                    "https://newsapi.org/v2/everything",
+                    params={
+                        "q": q,
+                        "apiKey": news_key,
+                        "pageSize": lim,
+                        "sortBy": "publishedAt",
+                        "language": "en",
+                    },
+                )
+                data = r.json()
+                arts = data.get("articles") or []
+                if arts:
+                    out = []
+                    for x in arts[:lim]:
+                        if not isinstance(x, dict):
+                            continue
+                        src = x.get("source") or {}
+                        name = src.get("name", "") if isinstance(src, dict) else ""
+                        out.append(
+                            _normalize_row(
+                                x.get("title", "") or "",
+                                x.get("url", "") or "",
+                                x.get("description", "") or "",
+                                name,
+                                x.get("publishedAt", "") or "",
+                            )
+                        )
+                    if out:
+                        return out
+        except Exception:
+            pass
+
+    try:
+        dd = await duckduckgo_search(q, lim)
+        if dd:
+            return dd
+    except Exception:
+        pass
+
+    try:
+        rss_url = _rss_url(q, "en")
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(rss_url)
+            r.raise_for_status()
+        return _parse_rss(r.text, lim)
+    except Exception:
+        return []
 
 
 def _normalize_search_hit(item: dict[str, Any]) -> dict[str, Any]:
-    """Normalize Tavily / DuckDuckGo rows to the schema used by search_news / synthesis."""
+    """Normalize rows to the schema used by search_news / synthesis."""
     title = item.get("title", "")
     return {
         "title": title,
         "summary": (item.get("summary") or "")[:500],
         "url": item.get("url", ""),
         "source": item.get("source", "") or "web",
-        "date": item.get("published") or item.get("date", ""),
-        "sentiment": _simple_sentiment(title),
+        "date": item.get("date", "") or item.get("published", ""),
+        "sentiment": item.get("sentiment") or _simple_sentiment(title),
     }
 
 
@@ -175,18 +270,16 @@ async def _search_news(p: dict[str, Any]) -> list[dict[str, Any]]:
     limit = min(int(p.get("limit") or 10), 50)
     language = str(p.get("language") or "en")
 
-    if (getattr(settings, "tavily_api_key", None) or "").strip():
-        items = await tavily_search(query, limit)
+    items = await smart_search(query, limit)
+    if items:
         return [_normalize_search_hit(it) for it in items]
 
     backend = str(getattr(settings, "news_search_backend", "google_rss") or "google_rss").lower()
-
     if backend == "duckduckgo":
         try:
             items = await duckduckgo_search(query, limit=limit)
             return [_normalize_search_hit(it) for it in items]
         except Exception:
-            # Fallback to RSS parsing below
             pass
 
     url = _rss_url(query, language)
@@ -203,7 +296,7 @@ async def _research_topic(p: dict[str, Any]) -> dict[str, Any]:
     depth = str(p.get("depth") or "standard").lower()
     save = bool(p.get("save_to_file", True))
     lim = 8 if depth == "quick" else 12
-    raw = await tavily_search(topic, lim)
+    raw = await smart_search(topic, lim)
     bullets = [_normalize_search_hit(it) for it in raw]
     lines = "\n".join(f"- {b.get('title')}: {b.get('url')}" for b in bullets[:10])
     resp = call_model(
@@ -218,7 +311,7 @@ async def _research_topic(p: dict[str, Any]) -> dict[str, Any]:
     sources_used = [b.get("url", "") for b in bullets if b.get("url")]
     file_path = ""
     if save:
-        out_dir = Path(settings.workspace_dir).resolve() / "research"
+        out_dir = workspace_root() / "research"
         out_dir.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^a-z0-9_]+", "_", topic.lower())[:50]
         fp = out_dir / f"research_{safe}.md"
@@ -282,3 +375,8 @@ async def execute(action: str, params: dict[str, Any]) -> Any:
         f"Unknown researcher action: '{action}'. "
         "Available: search_news, research_topic, monitor_keyword, get_industry_news"
     )
+
+
+# Backwards compatibility for tests / imports
+async def tavily_search(query: str, limit: int = 5) -> list[dict[str, Any]]:
+    return await smart_search(query, limit)

@@ -679,6 +679,24 @@ class TimezonePatchBody(BaseModel):
     timezone: str = Field(..., min_length=3, max_length=64)
 
 
+class UserSettingsPatchBody(BaseModel):
+    tavily_api_key: Optional[str] = None
+    news_api_key: Optional[str] = None
+    whatsapp_phone: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+
+
+def _mask_secret(val: str) -> str:
+    s = (val or "").strip()
+    if not s:
+        return ""
+    if len(s) <= 8:
+        return "***"
+    return s[:4] + "…" + s[-4:]
+
+
 # WhatsApp / Telegram (optional — import may be skipped if deps fail)
 if whatsapp_router is not None:
     app.include_router(whatsapp_router)
@@ -992,6 +1010,36 @@ async def auth_patch_timezone(body: TimezonePatchBody, auth: dict = Depends(requ
         "timezone": body.timezone,
         "current_time_for_user": now_for_user(body.timezone).isoformat(),
     }
+
+
+@app.get("/auth/me/settings")
+async def auth_me_settings(auth: dict = Depends(require_auth)):
+    uid = _require_authenticated_user(auth)
+    raw = await store.get_user_settings(uid)
+    out: dict[str, Any] = {}
+    if raw.get("tavily_api_key"):
+        out["tavily_api_key_set"] = True
+        out["tavily_api_key"] = _mask_secret(raw["tavily_api_key"])
+    else:
+        out["tavily_api_key_set"] = False
+    if raw.get("news_api_key"):
+        out["news_api_key_set"] = True
+        out["news_api_key"] = _mask_secret(raw["news_api_key"])
+    else:
+        out["news_api_key_set"] = False
+    for k in ("whatsapp_phone", "smtp_host", "smtp_user"):
+        if raw.get(k):
+            out[k] = raw[k]
+    out["smtp_password_set"] = bool(raw.get("smtp_password"))
+    return out
+
+
+@app.patch("/auth/me/settings")
+async def auth_patch_settings(body: UserSettingsPatchBody, auth: dict = Depends(require_auth)):
+    uid = _require_authenticated_user(auth)
+    patch = body.model_dump(exclude_unset=True)
+    await store.upsert_user_settings(uid, patch)
+    return {"ok": True}
 
 
 @app.post("/auth/refresh")

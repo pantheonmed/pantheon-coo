@@ -16,8 +16,9 @@ This is what separates a COO from a simple script runner.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 from agents.base import BaseAgent
@@ -202,7 +203,86 @@ def run_ground_checks(plan: PlanningOutput, execution: ExecutionOutput) -> tuple
             if not ok:
                 any_failed = True
 
+        elif tool == ToolName.RESEARCHER and step.action == "research_topic":
+            rd = _result_as_dict(raw)
+            fp = (rd or {}).get("file_path") or ""
+            summ = (rd or {}).get("summary") or ""
+            ok = bool(fp and Path(fp).is_file()) or (len(str(summ).split()) >= 20)
+            detail = "research_topic produced file or substantive summary" if ok else "research_topic output thin or missing file"
+            checks.append({
+                "check_type": "research_topic_output",
+                "step_id": step.step_id,
+                "passed": ok,
+                "detail": detail,
+            })
+            if not ok:
+                any_failed = True
+
     return checks, any_failed
+
+
+SCORE_RULES: dict[str, dict[str, float]] = {
+    "research": {"has_content": 0.4, "has_sources": 0.3, "has_structure": 0.3},
+    "communicate": {"email_saved": 0.5, "email_complete": 0.5},
+    "finance": {"invoice_created": 0.4, "calculations_correct": 0.4, "file_saved": 0.2},
+    "build": {"code_generated": 0.3, "code_runs": 0.4, "tests_pass": 0.3},
+}
+
+
+def compute_heuristic_score(inp: EvaluatorInput) -> float:
+    """Deterministic score boost from workspace files and tool outputs (0–1)."""
+    gt = (inp.goal_type or "general").lower().strip()
+    rules = SCORE_RULES.get(gt, {})
+    if not rules:
+        return 0.0
+    acc = 0.0
+    ws = inp.workspace_path or ""
+    if ws and os.path.isdir(ws):
+        try:
+            names = [f for f in os.listdir(ws) if not f.startswith(".")]
+        except OSError:
+            names = []
+        if names:
+            acc += 0.12
+        best_words = 0
+        http_hits = 0
+        has_heading = False
+        for fn in names[:25]:
+            path = os.path.join(ws, fn)
+            try:
+                if not os.path.isfile(path):
+                    continue
+                content = Path(path).read_text(encoding="utf-8", errors="ignore")
+                best_words = max(best_words, len(content.split()))
+                http_hits += content.lower().count("http")
+                if "##" in content:
+                    has_heading = True
+            except OSError:
+                continue
+        if gt == "research":
+            if best_words > 200:
+                acc += rules.get("has_content", 0.4) * 0.85
+            if http_hits >= 3:
+                acc += rules.get("has_sources", 0.3) * 0.85
+            if has_heading:
+                acc += rules.get("has_structure", 0.3) * 0.85
+
+    by_step = {r.step_id: r for r in inp.execution.results}
+    for step in inp.plan.steps:
+        sr = by_step.get(step.step_id)
+        if sr is None or sr.status != StepStatus.SUCCESS:
+            continue
+        if step.tool == ToolName.RESEARCHER and step.action == "research_topic":
+            rd = _result_as_dict(sr.result)
+            if not rd:
+                continue
+            urls = [u for u in (rd.get("sources_used") or []) if u]
+            if len(urls) >= 3:
+                acc += 0.12
+            elif len(urls) >= 1:
+                acc += 0.05
+
+    return min(1.0, acc)
 
 
 def apply_ground_cap(out: EvaluatorOutput, any_auto_failed: bool) -> EvaluatorOutput:
@@ -267,6 +347,15 @@ Evaluate and return the JSON now."""
                             "warning",
                         )
             out = apply_ground_cap(out, True)
+        h = compute_heuristic_score(inp)
+        if h > 0:
+            blended = min(1.0, max(out.score, out.score * 0.55 + h * 0.45))
+            out = out.model_copy(
+                update={
+                    "score": blended,
+                    "goal_met": blended >= settings.min_eval_score,
+                }
+            )
         return out
 
 

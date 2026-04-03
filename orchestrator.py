@@ -68,6 +68,79 @@ def _clip(text: str, n: int = 220) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+def _resolve_task_workspace_path(user_id: Optional[str]) -> str:
+    """Absolute workspace directory for this task (per-user when authenticated)."""
+    base = Path(settings.workspace_dir).resolve()
+    if user_id:
+        p = base / "users" / str(user_id)
+    else:
+        p = base
+    p.mkdir(parents=True, exist_ok=True)
+    return str(p)
+
+
+async def _simplified_fallback_task(
+    task_id: str,
+    command: str,
+    context: dict,
+    last_evaluation: Optional[EvaluatorOutput],
+    last_execution: Optional[ExecutionOutput],
+) -> bool:
+    """
+    After max iterations with low score: write a markdown summary to workspace.
+    Returns True if task was marked done.
+    """
+    if not last_evaluation or last_evaluation.score >= 0.5:
+        return False
+    try:
+        from agents.model_router import call_model
+
+        ws = context.get("workspace") or _resolve_task_workspace_path(context.get("user_id"))
+        fp = Path(ws) / "task_fallback_summary.md"
+        hint = (
+            "For full web research, add a free Tavily or NewsAPI key in Dashboard → Integrations "
+            "(or set TAVILY_API_KEY / NEWS_API_KEY on the server)."
+        )
+        resp = call_model(
+            system="You write short Markdown briefs when automation could not finish.",
+            user=(
+                f"Original task failed automated evaluation (score={last_evaluation.score:.2f}):\n{command}\n\n"
+                f"Write a concise Markdown note (under 400 words) for the user: what to do next manually, "
+                f"and include this hint: {hint}"
+            ),
+            use_fast=True,
+        )
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(resp.text, encoding="utf-8")
+        results_json = json.dumps(
+            [r.model_dump() for r in (last_execution.results if last_execution else [])],
+            default=str,
+        )
+        await store.update_status(
+            task_id,
+            TaskStatus.DONE,
+            summary=f"Simplified version completed — saved {fp.name}. {hint}",
+            eval_score=0.55,
+            iterations=settings.max_loop_iterations,
+            results_json=results_json,
+            error=None,
+        )
+        await store.log(task_id, "Simplified fallback completed after low evaluation score.", "info")
+        await store.push_stream_event(
+            task_id,
+            "loop_done",
+            {
+                "iteration": settings.max_loop_iterations,
+                "outcome": "simplified_fallback",
+                "score": 0.55,
+            },
+        )
+        return True
+    except Exception as e:
+        await store.log(task_id, f"Simplified fallback failed: {e}", "warning")
+        return False
+
+
 def _research_plan_enforce_researcher(plan: PlanningOutput, reasoning: ReasoningOutput) -> PlanningOutput:
     """
     For research goals: use the researcher tool for web search — never terminal curl/wget.
@@ -251,6 +324,7 @@ async def run(
     context["language"] = lang
 
     ws_tok = sandbox.set_user_workspace(context.get("user_id"))
+    context["workspace"] = _resolve_task_workspace_path(context.get("user_id"))
     prior_attempts: list[str] = []
     last_plan: Optional[PlanningOutput] = None
     last_execution: Optional[ExecutionOutput] = None
@@ -468,7 +542,11 @@ async def run(
             )
             with span("agent.execution", {"task_id": task_id, "step_count": len(plan.steps)}):
                 execution = await _executor.run(
-                    ExecutionInput(task_id=task_id, plan=plan)
+                    ExecutionInput(
+                        task_id=task_id,
+                        plan=plan,
+                        user_id=context.get("user_id"),
+                    )
                 )
             last_execution = execution
 
@@ -509,6 +587,9 @@ async def run(
                     plan=plan,
                     execution=execution,
                     task_id=task_id,
+                    goal_type=reasoning.goal_type or "",
+                    user_id=context.get("user_id"),
+                    workspace_path=context.get("workspace"),
                 )
             )
             with span("agent.evaluation", {"task_id": task_id, "score": evaluation.score}):
@@ -632,6 +713,11 @@ async def run(
             await store.log(task_id, f"Looping — hints: {hint_summary}", "warning")
 
         # ── Max iterations reached ────────────────────────────────────────
+        if await _simplified_fallback_task(
+            task_id, command, context, last_evaluation, last_execution
+        ):
+            return
+
         final_score = last_evaluation.score if last_evaluation else 0.0
         final_summary = (
             last_evaluation.summary if last_evaluation

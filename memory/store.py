@@ -301,6 +301,12 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
     user_id        TEXT,
     blacklisted_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id        TEXT PRIMARY KEY,
+    settings_json  TEXT NOT NULL DEFAULT '{}',
+    updated_at     TEXT NOT NULL
+);
 """
 
 
@@ -397,6 +403,20 @@ async def _ensure_schedules_timezone_column() -> None:
             await db.commit()
 
 
+async def _ensure_user_settings_table() -> None:
+    async with get_pool().acquire() as db:
+        await db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id        TEXT PRIMARY KEY,
+                settings_json  TEXT NOT NULL DEFAULT '{}',
+                updated_at     TEXT NOT NULL
+            );
+            """
+        )
+        await db.commit()
+
+
 async def _ensure_perf_indexes() -> None:
     sql_path = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "0017_perf_indexes.sql"
     if sql_path.is_file():
@@ -425,6 +445,7 @@ async def init() -> None:
     await _ensure_orders_payment_columns()
     await _ensure_schedules_timezone_column()
     await _ensure_perf_indexes()
+    await _ensure_user_settings_table()
     await _ensure_launch_migrations()
     try:
         n = await normalize_legacy_user_plans()
@@ -902,6 +923,46 @@ async def update_user_api_key(user_id: str, api_key: str) -> None:
     async with get_pool().acquire() as db:
         await db.execute("UPDATE users SET api_key=? WHERE user_id=?", (api_key, user_id))
         await db.commit()
+
+
+async def get_user_settings(user_id: str) -> dict[str, Any]:
+    """Per-user JSON blob (API keys, integrations)."""
+    async with get_pool().acquire() as db:
+        async with db.execute(
+            "SELECT settings_json FROM user_settings WHERE user_id=?", (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return {}
+    try:
+        out = json.loads(row[0] or "{}")
+        return out if isinstance(out, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+async def upsert_user_settings(user_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+    """Merge ``patch`` into stored settings; None skips; empty string clears a key."""
+    now = datetime.utcnow().isoformat()
+    merged = dict(await get_user_settings(user_id))
+    for k, v in patch.items():
+        if v is None:
+            continue
+        if isinstance(v, str) and not v.strip():
+            merged.pop(k, None)
+        else:
+            merged[k] = v
+    async with get_pool().acquire() as db:
+        await db.execute(
+            """INSERT INTO user_settings (user_id, settings_json, updated_at)
+               VALUES (?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 settings_json=excluded.settings_json,
+                 updated_at=excluded.updated_at""",
+            (user_id, json.dumps(merged), now),
+        )
+        await db.commit()
+    return merged
 
 
 async def update_last_login(user_id: str) -> None:

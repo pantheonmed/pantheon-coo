@@ -31,7 +31,7 @@ class TestTerminalSandbox:
 
     def test_blocked_command_raises(self):
         step = self._make_step("rm -rf /")
-        with pytest.raises(SecurityError, match="not allowed"):
+        with pytest.raises(SecurityError, match="not allowed|Blocked"):
             validate_step(step)
 
     def test_empty_command_raises(self):
@@ -72,6 +72,23 @@ class TestTerminalSandbox:
             "curl -sSL -o /tmp/pantheon_v2/out.txt https://example.com"
         )
         validate_step(step)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API-layer sanitize_command (semicolons allowed if segments are safe)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_sanitize_command_allows_safe_semicolon_chain():
+    from security.sandbox import sanitize_command
+
+    assert sanitize_command('echo "a"; echo "b"').startswith('echo')
+
+
+def test_sanitize_command_blocks_dangerous_semicolon_chain():
+    from security.sandbox import SecurityError, sanitize_command
+
+    with pytest.raises(SecurityError, match="Dangerous chained|Blocked"):
+        sanitize_command('echo ok; rm -rf /tmp')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
